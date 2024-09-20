@@ -1,223 +1,133 @@
 package com.example.brainwave
 
-import android.annotation.SuppressLint
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
-import com.google.accompanist.permissions.MultiplePermissionsState
-import com.google.accompanist.permissions.rememberMultiplePermissionsState
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import android.bluetooth.BluetoothServerSocket
+import android.bluetooth.BluetoothSocket
+import java.io.IOException
+import java.util.*
 
-val permissionList = mutableListOf<String>()
-val sdkVersion = android.os.Build.VERSION.SDK_INT
-val brainFlowManager = BrainFlowManager()
+private val requiredPermissions = arrayOf(
+    Manifest.permission.BLUETOOTH,
+    Manifest.permission.BLUETOOTH_ADMIN,
+    Manifest.permission.ACCESS_FINE_LOCATION
+)
+
+
 class MainActivity : ComponentActivity() {
-
-    private val foundDevices = mutableStateOf(emptyList<BleDevice>())
-
-
-    override fun onStop() {
-        brainFlowManager.stopBrainFlow()
-        super.onStop()
-    }
-
-    @SuppressLint("MissingPermission")
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+    private val PERMISSION_REQUEST_CODE = 1
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
-        if (sdkVersion <= 30) {
-            permissionList.add("android.permission.BLUETOOTH")
-            permissionList.add("android.permission.BLUETOOTH_ADMIN")
-        }
-
-        permissionList.add("android.permission.INTERNET")
-        permissionList.add("android.permission.ACCESS_NETWORK_STATE")
-        permissionList.add("android.permission.ACCESS_FINE_LOCATION")
-
-        if (sdkVersion > 30) {
-            permissionList.add("android.permission.BLUETOOTH_CONNECT")
-            permissionList.add("android.permission.BLUETOOTH_SCAN")
-        }
-
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
+        requestBluetoothPermissions()
         setContent {
-
-            // Check if Bluetooth is available on the device
-            val bluetoothAvailable =
-                packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
-            val bluetoothLEAvailable =
-                packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
-
-            val bluetoothManager: BluetoothManager = getSystemService(BluetoothManager::class.java)
-            val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
-            val bleScanManager =
-                BleScanManager(bluetoothManager, 10000, scanCallback = BleScanCallback({
-                    val name = it?.device?.name
-                    val address = it?.device?.address
-                    if (address.isNullOrBlank()) return@BleScanCallback
-
-                    if (!name.isNullOrBlank()) {
-                        val device = BleDevice(name, address)
-                        updateFoundDevices(device)
-                    }
-                }))
-
-            //bleScanManager.beforeScanActions.add { btnStartScan.isEnabled = false }
-            bleScanManager.beforeScanActions.add {
-                foundDevices.value = emptyList()
-                //adapter.notifyDataSetChanged()
-            }
-            //bleScanManager.afterScanActions.add { btnStartScan.isEnabled = true }
-
-            var permissionRequest by remember { mutableStateOf(false) }
-            var permissionGranted by remember { mutableStateOf(false) }
-            val permissionState = rememberMultiplePermissionsState(permissionList)
-
-            if (!permissionRequest) {
-                RequestPermission(permissionState) { granted ->
-                    permissionGranted = granted
-                    permissionRequest = true
-                    if (granted) {
-                        bleScanManager.scanBleDevices()
-                    }
-                }
-            }
-
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                topBar = {
-                    TopAppBar(
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            titleContentColor = MaterialTheme.colorScheme.primary,
-                        ),
-                        title = {
-                            Text("BrainWave Connector")
-                        }
-                    )
-                },
-                floatingActionButton = {
-                    FloatingActionButton(
-                        onClick = {
-                            Toast.makeText(this, "Refreshing....", Toast.LENGTH_SHORT).show()
-                            permissionState.launchMultiplePermissionRequest()
-                            if (permissionState.allPermissionsGranted) {
-                                permissionGranted = true
-                                bleScanManager.scanBleDevices()
-                            }
-                            // viewModel.startScanning() // Uncomment if using ViewModel
-                        },
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                    }
-                }
-            ) { innerPadding ->
-                Column(
-                    modifier = Modifier.padding(innerPadding),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (!bluetoothLEAvailable || !bluetoothAvailable || bluetoothAdapter == null) {
-                        Text("Bluetooth LE is not available on this device.")
-                    } else if (!bluetoothAdapter.isEnabled || !permissionGranted) {
-                        Text("App missing permission to work correctly!")
-                    } else {
-                        BleDeviceListContainer()
-                    }
-                }
-
-            }
+            BluetoothReceiver(this)
         }
     }
 
-    private fun updateFoundDevices(device: BleDevice) {
-        foundDevices.value = foundDevices.value.toMutableList().apply {
-            if (!contains(device)) {
-                Log.d("Bluetooth", "name: ${device.name}, address: ${device.address}")
-                add(device)
-            }
+    private fun requestBluetoothPermissions() {
+        val permissionsToRequest = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest, PERMISSION_REQUEST_CODE)
         }
-    }
-
-    @Composable
-    fun BleDeviceListContainer() {
-        val devices by remember { foundDevices }
-        BleDeviceList(devices)
-    }
-}
-
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-fun RequestPermission(
-    permissionState: MultiplePermissionsState,
-    onPermissionStatusChanged: (Boolean) -> Unit
-) {
-    val openAlertDialog = remember { mutableStateOf(false) }
-
-    Log.d("Permission", "Request Permission")
-    if (!permissionState.allPermissionsGranted) {
-        openAlertDialog.value = true
-        openAlertDialog.value = true
-        if (openAlertDialog.value) {
-            ShowAlert(
-                onDismissRequest = {
-                    openAlertDialog.value = false
-                    onPermissionStatusChanged(false)
-                },
-                onConfirmation = {
-                    openAlertDialog.value = false
-                    permissionState.launchMultiplePermissionRequest()
-                    onPermissionStatusChanged(permissionState.allPermissionsGranted)
-                },
-                dialogTitle = "Request Permission",
-                dialogText = "App missing permission to work correctly!",
-                icon = Icons.Default.Warning
-            )
-        }
-    } else {
-        onPermissionStatusChanged(true) // Permission already granted
     }
 }
 
 @Composable
-fun ShowAlert(
-    onDismissRequest: () -> Unit,
-    onConfirmation: () -> Unit,
-    dialogTitle: String,
-    dialogText: String,
-    icon: ImageVector,
-) {
-    AlertDialog(
-        icon = { Icon(icon, contentDescription = "Example Icon") },
-        onDismissRequest = onDismissRequest,
-        title = { Text(text = dialogTitle) },
-        text = { Text(text = dialogText) },
-        confirmButton = {
-            TextButton(onClick = onConfirmation) {
-                Text("Confirm")
+fun BluetoothReceiver(context: Context) {
+    var message by remember { mutableStateOf("Waiting for message...") }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        if (arePermissionsGranted(context, requiredPermissions)) {
+            coroutineScope.launch(Dispatchers.IO) {
+                listenForBluetoothMessages(context) { receivedMessage ->
+                    message = receivedMessage
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text("Dismiss")
+        } else {
+            message = "Bluetooth permissions not granted"
+        }
+    }
+
+    Column {
+        Text("Received Message: $message")
+    }
+}
+
+private fun arePermissionsGranted(context: Context, permissions: Array<String>): Boolean {
+    return requiredPermissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+}
+
+private fun listenForBluetoothMessages(context: Context, onMessageReceived: (String) -> Unit) {
+    if (!arePermissionsGranted(context, requiredPermissions)) {
+        // Permissions not granted, handle this case (e.g., show a message to the user)
+        onMessageReceived("Bluetooth permissions not granted")
+        return
+    }
+
+    val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
+    if (bluetoothAdapter == null) {
+        // Device doesn't support Bluetooth
+        onMessageReceived("Device doesn't support Bluetooth")
+        return
+    }
+
+    val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Standard SerialPortService ID
+
+    try {
+        val serverSocket: BluetoothServerSocket? = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("MyApp", uuid)
+        var shouldLoop = true
+        while (shouldLoop) {
+            try {
+                val socket: BluetoothSocket? = serverSocket?.accept()
+                socket?.let {
+                    val inputStream = it.inputStream
+                    val buffer = ByteArray(1024)
+                    val bytes = inputStream.read(buffer)
+                    val incomingMessage = String(buffer, 0, bytes)
+                    onMessageReceived(incomingMessage)
+                    it.close()
+                }
+            } catch (e: IOException) {
+                // Handle connection errors
+                e.printStackTrace()
+                shouldLoop = false
+                onMessageReceived("Bluetooth connection error: ${e.message}")
+            } catch (e: SecurityException) {
+                // Handle permission denied error
+                e.printStackTrace()
+                shouldLoop = false
+                onMessageReceived("Bluetooth permission denied: ${e.message}")
             }
         }
-    )
+        serverSocket?.close()
+    } catch (e: IOException) {
+        // Handle server socket errors
+        e.printStackTrace()
+        onMessageReceived("Bluetooth server socket error: ${e.message}")
+    } catch (e: SecurityException) {
+        // Handle permission denied error
+        e.printStackTrace()
+        onMessageReceived("Bluetooth permission denied: ${e.message}")
+    }
 }
