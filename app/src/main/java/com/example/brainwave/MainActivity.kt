@@ -19,6 +19,13 @@ import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
 import java.io.IOException
 import java.util.*
+import org.json.JSONArray
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 private val requiredPermissions = arrayOf(
     Manifest.permission.BLUETOOTH,
@@ -52,13 +59,22 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BluetoothReceiver(context: Context) {
     var message by remember { mutableStateOf("Waiting for message...") }
+    var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         if (arePermissionsGranted(context, requiredPermissions)) {
             coroutineScope.launch(Dispatchers.IO) {
                 listenForBluetoothMessages(context) { receivedMessage ->
-                    message = receivedMessage
+                    try {
+                        val jsonArray = JSONArray(receivedMessage)
+                        val newPoints = List(10) { jsonArray.getDouble(it).toFloat() }
+                        dataPoints = (dataPoints.drop(10) + newPoints).takeLast(100)
+                        message = "Last received: ${newPoints.joinToString(", ")}"
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        message = "Error: ${e.message}"
+                    }
                 }
             }
         } else {
@@ -68,6 +84,41 @@ fun BluetoothReceiver(context: Context) {
 
     Column {
         Text("Received Message: $message")
+        Text("EEG Graph")
+        EEGGraph(dataPoints)
+    }
+}
+
+@Composable
+fun EEGGraph(dataPoints: List<Float>) {
+    val maxValue = dataPoints.maxOrNull() ?: 1f
+    val minValue = dataPoints.minOrNull() ?: 0f
+
+    Canvas(modifier = Modifier
+        .fillMaxWidth()
+        .height(200.dp)
+        .padding(16.dp)
+    ) {
+        val width = size.width
+        val height = size.height
+        val pointWidth = width / (dataPoints.size - 1)
+        val valueRange = (maxValue - minValue).coerceAtLeast(1f)
+
+        dataPoints.forEachIndexed { index, value ->
+            if (index < dataPoints.size - 1) {
+                val startX = index * pointWidth
+                val startY = height - ((value - minValue) / valueRange * height)
+                val endX = (index + 1) * pointWidth
+                val endY = height - ((dataPoints[index + 1] - minValue) / valueRange * height)
+
+                drawLine(
+                    color = Color.Blue,
+                    start = Offset(startX, startY),
+                    end = Offset(endX, endY),
+                    strokeWidth = 2f
+                )
+            }
+        }
     }
 }
 
@@ -79,7 +130,6 @@ private fun arePermissionsGranted(context: Context, permissions: Array<String>):
 
 private fun listenForBluetoothMessages(context: Context, onMessageReceived: (String) -> Unit) {
     if (!arePermissionsGranted(context, requiredPermissions)) {
-        // Permissions not granted, handle this case (e.g., show a message to the user)
         onMessageReceived("Bluetooth permissions not granted")
         return
     }
@@ -87,12 +137,11 @@ private fun listenForBluetoothMessages(context: Context, onMessageReceived: (Str
     val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     if (bluetoothAdapter == null) {
-        // Device doesn't support Bluetooth
         onMessageReceived("Device doesn't support Bluetooth")
         return
     }
 
-    val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Standard SerialPortService ID
+    val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
     try {
         val serverSocket: BluetoothServerSocket? = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("MyApp", uuid)
@@ -103,30 +152,33 @@ private fun listenForBluetoothMessages(context: Context, onMessageReceived: (Str
                 socket?.let {
                     val inputStream = it.inputStream
                     val buffer = ByteArray(1024)
-                    val bytes = inputStream.read(buffer)
-                    val incomingMessage = String(buffer, 0, bytes)
-                    onMessageReceived(incomingMessage)
+
+                    // Continuously read from the input stream
+                    while (true) {
+                        val bytes = inputStream.read(buffer)
+                        if (bytes > 0) {
+                            val incomingMessage = String(buffer, 0, bytes)
+                            onMessageReceived(incomingMessage)
+                        } else {
+                            // Connection lost or closed
+                            break
+                        }
+                    }
                     it.close()
                 }
             } catch (e: IOException) {
-                // Handle connection errors
                 e.printStackTrace()
-                shouldLoop = false
                 onMessageReceived("Bluetooth connection error: ${e.message}")
             } catch (e: SecurityException) {
-                // Handle permission denied error
                 e.printStackTrace()
-                shouldLoop = false
                 onMessageReceived("Bluetooth permission denied: ${e.message}")
             }
         }
         serverSocket?.close()
     } catch (e: IOException) {
-        // Handle server socket errors
         e.printStackTrace()
         onMessageReceived("Bluetooth server socket error: ${e.message}")
     } catch (e: SecurityException) {
-        // Handle permission denied error
         e.printStackTrace()
         onMessageReceived("Bluetooth permission denied: ${e.message}")
     }
