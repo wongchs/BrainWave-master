@@ -11,6 +11,77 @@ import com.example.brainwave.utils.requiredPermissions
 import java.io.IOException
 import android.util.Log
 import java.util.UUID
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.app.Service
+import android.content.Intent
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import com.example.brainwave.MainActivity
+import android.R
+
+
+class BluetoothService : Service() {
+    private lateinit var bluetoothClient: BluetoothClient
+    private val CHANNEL_ID = "BluetoothServiceChannel"
+    private val NOTIFICATION_ID = 1
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        bluetoothClient = BluetoothClient(this) { message ->
+            updateNotification(message)
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val notification = createNotification("Waiting for data...")
+        startForeground(NOTIFICATION_ID, notification)
+
+        bluetoothClient.connectToServer()
+
+        return START_STICKY
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Bluetooth Service Channel"
+            val descriptionText = "Channel for Bluetooth Service notifications"
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createNotification(content: String): Notification {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Bluetooth Data")
+            .setContentText(content)
+            .setSmallIcon(R.drawable.ic_dialog_info)
+            .setContentIntent(pendingIntent)
+            .build()
+    }
+
+    private fun updateNotification(content: String) {
+        val notification = createNotification(content)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+}
 
 class BluetoothClient(private val context: Context, private val onMessageReceived: (String) -> Unit) {
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
@@ -44,6 +115,22 @@ class BluetoothClient(private val context: Context, private val onMessageReceive
         } ?: onMessageReceived("Server device not found. Make sure it's paired.")
     }
 
+    private fun reconnectToServer() {
+        Thread {
+            while (true) {
+                try {
+                    connectToServer()
+                    break
+                } catch (e: IOException) {
+                    Log.e("BluetoothClient", "Reconnection failed", e)
+                    Thread.sleep(5000) // Wait 5 seconds before trying again
+                }
+            }
+        }.start()
+    }
+
+
+
     private fun listenForData() {
         Thread {
             val buffer = ByteArray(1024)
@@ -59,6 +146,7 @@ class BluetoothClient(private val context: Context, private val onMessageReceive
                 } catch (e: IOException) {
                     Log.e("BluetoothClient", "Error reading data", e)
                     onMessageReceived("Connection lost: ${e.message}")
+                    reconnectToServer()
                     break
                 }
             }
