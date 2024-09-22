@@ -1,6 +1,7 @@
 package com.example.brainwave.bluetooth
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
@@ -8,60 +9,67 @@ import android.content.Context
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import java.io.IOException
+import android.util.Log
 import java.util.UUID
 
-fun listenForBluetoothMessages(context: Context, onMessageReceived: (String) -> Unit) {
-    if (!arePermissionsGranted(context, requiredPermissions)) {
-        onMessageReceived("Bluetooth permissions not granted")
-        return
-    }
+class BluetoothClient(private val context: Context, private val onMessageReceived: (String) -> Unit) {
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var socket: BluetoothSocket? = null
+    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
-    val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-    val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
-    if (bluetoothAdapter == null) {
-        onMessageReceived("Device doesn't support Bluetooth")
-        return
-    }
+    fun connectToServer() {
+        if (bluetoothAdapter == null) {
+            onMessageReceived("Device doesn't support Bluetooth")
+            return
+        }
 
-    val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        if (!bluetoothAdapter.isEnabled) {
+            onMessageReceived("Bluetooth is not enabled")
+            return
+        }
 
-    try {
-        val serverSocket: BluetoothServerSocket? = bluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord("MyApp", uuid)
-        var shouldLoop = true
-        while (shouldLoop) {
+        val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
+        val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" } // Replace with your laptop's Bluetooth name
+
+        serverDevice?.let { device ->
             try {
-                val socket: BluetoothSocket? = serverSocket?.accept()
-                socket?.let {
-                    val inputStream = it.inputStream
-                    val buffer = ByteArray(1024)
+                socket = device.createRfcommSocketToServiceRecord(uuid)
+                socket?.connect()
+                onMessageReceived("Connected to server")
+                listenForData()
+            } catch (e: IOException) {
+                Log.e("BluetoothClient", "Could not connect to server", e)
+                onMessageReceived("Failed to connect: ${e.message}")
+            }
+        } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+    }
 
-                    // Continuously read from the input stream
-                    while (true) {
-                        val bytes = inputStream.read(buffer)
-                        if (bytes > 0) {
-                            val incomingMessage = String(buffer, 0, bytes)
-                            onMessageReceived(incomingMessage)
-                        } else {
-                            // Connection lost or closed
-                            break
+    private fun listenForData() {
+        Thread {
+            val buffer = ByteArray(1024)
+            while (true) {
+                try {
+                    val bytes = socket?.inputStream?.read(buffer)
+                    bytes?.let {
+                        if (it > 0) {
+                            val receivedMessage = String(buffer, 0, it)
+                            onMessageReceived(receivedMessage)
                         }
                     }
-                    it.close()
+                } catch (e: IOException) {
+                    Log.e("BluetoothClient", "Error reading data", e)
+                    onMessageReceived("Connection lost: ${e.message}")
+                    break
                 }
-            } catch (e: IOException) {
-                e.printStackTrace()
-                onMessageReceived("Bluetooth connection error: ${e.message}")
-            } catch (e: SecurityException) {
-                e.printStackTrace()
-                onMessageReceived("Bluetooth permission denied: ${e.message}")
             }
+        }.start()
+    }
+
+    fun disconnect() {
+        try {
+            socket?.close()
+        } catch (e: IOException) {
+            Log.e("BluetoothClient", "Error closing socket", e)
         }
-        serverSocket?.close()
-    } catch (e: IOException) {
-        e.printStackTrace()
-        onMessageReceived("Bluetooth server socket error: ${e.message}")
-    } catch (e: SecurityException) {
-        e.printStackTrace()
-        onMessageReceived("Bluetooth permission denied: ${e.message}")
     }
 }
