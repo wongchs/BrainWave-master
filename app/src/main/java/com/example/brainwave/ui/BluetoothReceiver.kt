@@ -17,35 +17,25 @@ import com.example.brainwave.utils.requiredPermissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONArray
+import org.json.JSONObject
 
 @Composable
-fun BluetoothReceiver(context: Context) {
+fun BluetoothReceiver(context: Context, receivedData: String) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
-    val bluetoothClient = remember { BluetoothClient(context) { receivedMessage ->
-        try {
-            val jsonArray = JSONArray(receivedMessage)
-            val newPoints = List(10) { jsonArray.getDouble(it).toFloat() }
-            dataPoints = (dataPoints.drop(10) + newPoints).takeLast(100)
-            message = "Last received: ${newPoints.joinToString(", ")}"
-        } catch (e: Exception) {
-            e.printStackTrace()
-            message = "Error: ${e.message}"
-        }
-    }
-    }
 
-    LaunchedEffect(Unit) {
-        if (arePermissionsGranted(context, requiredPermissions)) {
-            bluetoothClient.connectToServer()
-        } else {
-            message = "Bluetooth permissions not granted"
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            bluetoothClient.disconnect()
+    LaunchedEffect(receivedData) {
+        if (receivedData.isNotEmpty()) {
+            try {
+                val jsonObject = JSONObject(receivedData)
+                val jsonArray = jsonObject.getJSONArray("data")
+                val newPoints = List(jsonArray.length()) { jsonArray.getDouble(it).toFloat() }
+                dataPoints = (dataPoints.drop(newPoints.size) + newPoints).takeLast(100)
+                message = "Last received: ${newPoints.joinToString(", ")}"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                message = "Error: ${e.message}"
+            }
         }
     }
 

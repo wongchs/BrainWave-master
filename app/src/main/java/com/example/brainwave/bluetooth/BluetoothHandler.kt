@@ -22,18 +22,123 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.brainwave.MainActivity
 import android.R
+import org.json.JSONObject
 
+class BluetoothClient(
+    private val context: Context,
+    private val onMessageReceived: (String) -> Unit
+) {
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var socket: BluetoothSocket? = null
+    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+    fun connectToServer() {
+        if (bluetoothAdapter == null) {
+            onMessageReceived("Device doesn't support Bluetooth")
+            return
+        }
+
+        if (!bluetoothAdapter.isEnabled) {
+            onMessageReceived("Bluetooth is not enabled")
+            return
+        }
+
+        val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
+        val serverDevice =
+            pairedDevices?.find { it.name == "NBLK-WAX9X" } // Replace with your laptop's Bluetooth name
+
+        serverDevice?.let { device ->
+            try {
+                socket = device.createRfcommSocketToServiceRecord(uuid)
+                socket?.connect()
+                onMessageReceived("Connected to server")
+                listenForData()
+            } catch (e: IOException) {
+                Log.e("BluetoothClient", "Could not connect to server", e)
+                onMessageReceived("Failed to connect: ${e.message}")
+            }
+        } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+    }
+
+    private fun reconnectToServer() {
+        Thread {
+            while (true) {
+                try {
+                    connectToServer()
+                    break
+                } catch (e: IOException) {
+                    Log.e("BluetoothClient", "Reconnection failed", e)
+                    Thread.sleep(5000) // Wait 5 seconds before trying again
+                }
+            }
+        }.start()
+    }
+
+    private val messageBuffer = StringBuilder()
+
+    private fun listenForData() {
+        Thread {
+            val buffer = ByteArray(1024)
+            while (true) {
+                try {
+                    val bytes = socket?.inputStream?.read(buffer)
+                    bytes?.let {
+                        if (it > 0) {
+                            val receivedData = String(buffer, 0, it)
+                            messageBuffer.append(receivedData)
+
+                            // Check if we have a complete JSON object
+                            if (isValidJson(messageBuffer.toString())) {
+                                onMessageReceived(messageBuffer.toString())
+                                messageBuffer.clear()
+                            }
+                        }
+                    }
+                } catch (e: IOException) {
+                    Log.e("BluetoothClient", "Error reading data", e)
+                    onMessageReceived("Connection lost: ${e.message}")
+                    reconnectToServer()
+                    break
+                }
+            }
+        }.start()
+    }
+
+    private fun isValidJson(json: String): Boolean {
+        try {
+            JSONObject(json)
+            return true
+        } catch (e: Exception) {
+            return false
+        }
+    }
+
+
+
+    fun disconnect() {
+        try {
+            socket?.close()
+        } catch (e: IOException) {
+            Log.e("BluetoothClient", "Error closing socket", e)
+        }
+    }
+}
 
 class BluetoothService : Service() {
     private lateinit var bluetoothClient: BluetoothClient
     private val CHANNEL_ID = "BluetoothServiceChannel"
     private val NOTIFICATION_ID = 1
 
+    companion object {
+        var dataCallback: ((String) -> Unit)? = null
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         bluetoothClient = BluetoothClient(this) { message ->
             updateNotification(message)
+            dataCallback?.invoke(message)
         }
     }
 
@@ -76,88 +181,11 @@ class BluetoothService : Service() {
 
     private fun updateNotification(content: String) {
         val notification = createNotification(content)
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
 
-class BluetoothClient(private val context: Context, private val onMessageReceived: (String) -> Unit) {
-    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
-    private var socket: BluetoothSocket? = null
-    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-
-    fun connectToServer() {
-        if (bluetoothAdapter == null) {
-            onMessageReceived("Device doesn't support Bluetooth")
-            return
-        }
-
-        if (!bluetoothAdapter.isEnabled) {
-            onMessageReceived("Bluetooth is not enabled")
-            return
-        }
-
-        val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
-        val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" } // Replace with your laptop's Bluetooth name
-
-        serverDevice?.let { device ->
-            try {
-                socket = device.createRfcommSocketToServiceRecord(uuid)
-                socket?.connect()
-                onMessageReceived("Connected to server")
-                listenForData()
-            } catch (e: IOException) {
-                Log.e("BluetoothClient", "Could not connect to server", e)
-                onMessageReceived("Failed to connect: ${e.message}")
-            }
-        } ?: onMessageReceived("Server device not found. Make sure it's paired.")
-    }
-
-    private fun reconnectToServer() {
-        Thread {
-            while (true) {
-                try {
-                    connectToServer()
-                    break
-                } catch (e: IOException) {
-                    Log.e("BluetoothClient", "Reconnection failed", e)
-                    Thread.sleep(5000) // Wait 5 seconds before trying again
-                }
-            }
-        }.start()
-    }
-
-
-
-    private fun listenForData() {
-        Thread {
-            val buffer = ByteArray(1024)
-            while (true) {
-                try {
-                    val bytes = socket?.inputStream?.read(buffer)
-                    bytes?.let {
-                        if (it > 0) {
-                            val receivedMessage = String(buffer, 0, it)
-                            onMessageReceived(receivedMessage)
-                        }
-                    }
-                } catch (e: IOException) {
-                    Log.e("BluetoothClient", "Error reading data", e)
-                    onMessageReceived("Connection lost: ${e.message}")
-                    reconnectToServer()
-                    break
-                }
-            }
-        }.start()
-    }
-
-    fun disconnect() {
-        try {
-            socket?.close()
-        } catch (e: IOException) {
-            Log.e("BluetoothClient", "Error closing socket", e)
-        }
-    }
-}
