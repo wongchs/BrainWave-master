@@ -23,9 +23,10 @@ fun EEGGraph(dataPoints: List<Float>) {
             .height(250.dp)
             .padding(16.dp)
     ) {
-        Canvas(modifier = Modifier
-            .fillMaxSize()
-            .padding(start = 40.dp, bottom = 40.dp, top = 20.dp, end = 20.dp)
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 40.dp, bottom = 40.dp, top = 20.dp, end = 20.dp)
         ) {
             val width = size.width
             val height = size.height
