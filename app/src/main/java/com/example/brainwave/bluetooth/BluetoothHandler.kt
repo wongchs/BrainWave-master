@@ -131,19 +131,22 @@ class BluetoothService : Service() {
 
     companion object {
         var dataCallback: ((String) -> Unit)? = null
+        var isAppInForeground = false
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         bluetoothClient = BluetoothClient(this) { message ->
-            updateNotification(message)
+            if (!isAppInForeground) {
+                updateNotification(message)
+            }
             dataCallback?.invoke(message)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("Waiting for data...")
+        val notification = createNotification("Bluetooth Service Running")
         startForeground(NOTIFICATION_ID, notification)
 
         bluetoothClient.connectToServer()
@@ -155,9 +158,11 @@ class BluetoothService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Bluetooth Service Channel"
             val descriptionText = "Channel for Bluetooth Service notifications"
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val importance = NotificationManager.IMPORTANCE_LOW
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
+                setSound(null, null)
+                enableVibration(false)
             }
             val notificationManager: NotificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -176,16 +181,20 @@ class BluetoothService : Service() {
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
+            .setSound(null)
+            .setVibrate(null)
+            .setOnlyAlertOnce(true)
             .build()
     }
 
     private fun updateNotification(content: String) {
-        val notification = createNotification(content)
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        if (!isAppInForeground) {
+            val notification = createNotification(content)
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 }
-

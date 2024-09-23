@@ -34,4 +34,14 @@ class MainActivity : ComponentActivity() {
             startService(serviceIntent)
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        BluetoothService.isAppInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        BluetoothService.isAppInForeground = false
+    }
 }
