@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
+    id("com.google.gms.google-services")
+
 }
 
 android {
@@ -50,6 +52,7 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -59,7 +62,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.accompanist.permissions.z)
-    implementation(files("libs/brainflow-jar-with-dependencies.jar"))
     implementation(libs.androidx.appcompat)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -71,6 +73,6 @@ dependencies {
     implementation("androidx.compose.material:material:1.4.1")
     implementation("androidx.compose.material3:material3:1.0.1")
     implementation("org.json:json:20210307")
-
+    implementation("com.google.firebase:firebase-firestore")
 
 }

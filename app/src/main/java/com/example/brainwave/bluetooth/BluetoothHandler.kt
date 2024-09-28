@@ -22,11 +22,14 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.brainwave.MainActivity
 import android.R
+import android.media.RingtoneManager
+import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONObject
 
 class BluetoothClient(
     private val context: Context,
-    private val onMessageReceived: (String) -> Unit
+    private val onMessageReceived: (String) -> Unit,
+    private val onSeizureDetected: (String, List<Float>, String) -> Unit
 ) {
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket: BluetoothSocket? = null
@@ -87,8 +90,14 @@ class BluetoothClient(
                             val receivedData = String(buffer, 0, it)
                             messageBuffer.append(receivedData)
 
-                            // Check if we have a complete JSON object
                             if (isValidJson(messageBuffer.toString())) {
+                                val jsonObject = JSONObject(messageBuffer.toString())
+                                if (jsonObject.has("seizure_detected") && jsonObject.getBoolean("seizure_detected")) {
+                                    val data = jsonObject.getJSONArray("data")
+                                    val dataList = MutableList(data.length()) { data.getDouble(it).toFloat() }
+                                    val timestamp = jsonObject.getString("timestamp")
+                                    onSeizureDetected(timestamp, dataList, getLocation())
+                                }
                                 onMessageReceived(messageBuffer.toString())
                                 messageBuffer.clear()
                             }
@@ -102,6 +111,12 @@ class BluetoothClient(
                 }
             }
         }.start()
+    }
+
+    private fun getLocation(): String {
+        // Implement location retrieval logic here
+        // For simplicity, we'll return a dummy location
+        return "Latitude: 40.7128, Longitude: -74.0060"
     }
 
     private fun isValidJson(json: String): Boolean {
@@ -131,19 +146,77 @@ class BluetoothService : Service() {
 
     companion object {
         var dataCallback: ((String) -> Unit)? = null
+        var seizureCallback: ((String, List<Float>, String) -> Unit)? = null
         var isAppInForeground = false
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        bluetoothClient = BluetoothClient(this) { message ->
-            if (!isAppInForeground) {
-                updateNotification(message)
+        bluetoothClient = BluetoothClient(
+            this,
+            { message ->
+                if (!isAppInForeground) {
+                    updateNotification(message)
+                }
+                dataCallback?.invoke(message)
+            },
+            { timestamp, data, location ->
+                handleSeizureDetection(timestamp, data, location)
             }
-            dataCallback?.invoke(message)
-        }
+        )
     }
+
+    private fun handleSeizureDetection(timestamp: String, data: List<Float>, location: String) {
+        // Show push notification
+        val notification = createSeizureNotification(timestamp)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(2, notification)
+
+        // Log data and save to Firestore
+        logSeizureData(timestamp, data, location)
+
+        // Invoke callback
+        seizureCallback?.invoke(timestamp, data, location)
+    }
+
+    private fun createSeizureNotification(timestamp: String): Notification {
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Seizure Detected")
+            .setContentText("A seizure was detected at $timestamp")
+            .setSmallIcon(R.drawable.ic_dialog_alert)
+            .setContentIntent(pendingIntent)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+    }
+
+    private fun logSeizureData(timestamp: String, data: List<Float>, location: String) {
+        // Implement Firestore logging here
+        // For example:
+        val db = FirebaseFirestore.getInstance()
+        val seizureData = hashMapOf(
+            "timestamp" to timestamp,
+            "eegData" to data,
+            "location" to location
+        )
+
+        db.collection("seizures")
+            .add(seizureData)
+            .addOnSuccessListener { documentReference ->
+                Log.d("Firestore", "DocumentSnapshot added with ID: ${documentReference.id}")
+            }
+            .addOnFailureListener { e ->
+                Log.w("Firestore", "Error adding document", e)
+            }
+    }
+
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification("Bluetooth Service Running")

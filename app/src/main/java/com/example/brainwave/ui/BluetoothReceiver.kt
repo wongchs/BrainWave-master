@@ -2,6 +2,7 @@ package com.example.brainwave.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -19,8 +20,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
+
 @Composable
-fun BluetoothReceiver(context: Context, receivedData: String) {
+fun BluetoothReceiver(context: Context, receivedData: String, seizureData: Triple<String, List<Float>, String>?) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
 
@@ -43,5 +45,12 @@ fun BluetoothReceiver(context: Context, receivedData: String) {
         Text("Status: $message")
         Text("EEG Graph")
         EEGGraph(dataPoints)
+
+        seizureData?.let { (timestamp, data, location) ->
+            Text("Seizure Detected", style = MaterialTheme.typography.headlineSmall)
+            Text("Timestamp: $timestamp")
+            Text("Location: $location")
+            Text("EEG Data: ${data.take(10)}...")
+        }
     }
 }
