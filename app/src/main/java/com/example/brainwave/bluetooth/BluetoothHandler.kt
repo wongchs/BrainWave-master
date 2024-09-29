@@ -194,10 +194,10 @@ class BluetoothService : Service() {
         // Log data and save to Firestore
         logSeizureData(timestamp, data, locationData)
 
+        sendSMSNotifications(timestamp, locationData)
+
         // Invoke callback
         seizureCallback?.invoke(timestamp, data, locationData)
-
-        sendSMSNotifications(timestamp, locationData)
     }
 
     private fun createSeizureNotification(timestamp: String, locationData: LocationManager.LocationData?): Notification {
@@ -313,40 +313,50 @@ class BluetoothService : Service() {
                 .addOnSuccessListener { documents ->
                     for (document in documents) {
                         val contact = document.toObject(EmergencyContact::class.java)
-                        sendSMS(contact.phoneNumber, createSMSMessage(timestamp, locationData))
+                        val message = createSMSMessage(timestamp, locationData)
+                        sendSMS(contact.phoneNumber, message)
                     }
+                    Log.d("SMS", "Attempted to send SMS notifications for seizure at $timestamp")
                 }
                 .addOnFailureListener { exception ->
                     Log.w("Firestore", "Error getting emergency contacts", exception)
                 }
+        } else {
+            Log.w("SMS", "User not authenticated, cannot send SMS notifications")
         }
     }
 
-    private fun sendSMS(phoneNumber: String, message: String) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
-            try {
-                Log.d("SMS", "Attempting to send SMS to $phoneNumber")
-                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    this.getSystemService(SmsManager::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    SmsManager.getDefault()
-                }
-                smsManager.sendTextMessage(phoneNumber, null, message, null, null)
-                Log.d("SMS", "SMS sent successfully to $phoneNumber")
-            } catch (e: Exception) {
-                Log.e("SMS", "Failed to send SMS to $phoneNumber", e)
-            }
-        } else {
-            Log.e("SMS", "SMS permission not granted")
-        }
-    }
 
     private fun createSMSMessage(timestamp: String, locationData: LocationManager.LocationData?): String {
+        val baseMessage = "Seizure detected at $timestamp"
         val locationString = locationData?.let {
-            "Location: ${it.location.latitude}, ${it.location.longitude}\nAddress: ${it.address}"
-        } ?: "Location unavailable"
+            "\nLocation: ${it.location.latitude}, ${it.location.longitude}" +
+                    "\nAddress: ${it.address}"
+        } ?: "\nLocation information unavailable"
 
-        return "Seizure detected at $timestamp\n$locationString"
+        return baseMessage + locationString
+    }
+
+
+    private fun sendSMS(phoneNumber: String, message: String) {
+        try {
+            Log.d("SMS", "Attempting to send SMS to $phoneNumber")
+            Log.d("SMS", "Message content: $message")
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                this.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+
+            // Split the message if it's too long
+            val parts = smsManager.divideMessage(message)
+            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+
+            Log.d("SMS", "SMS sent successfully to $phoneNumber")
+        } catch (e: Exception) {
+            Log.e("SMS", "Failed to send SMS to $phoneNumber", e)
+            e.printStackTrace()
+        }
     }
 }
