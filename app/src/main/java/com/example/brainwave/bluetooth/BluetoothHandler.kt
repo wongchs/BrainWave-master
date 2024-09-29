@@ -31,17 +31,17 @@ import org.json.JSONObject
 class BluetoothClient(
     private val context: Context,
     private val onMessageReceived: (String) -> Unit,
-    private val onSeizureDetected: (String, List<Float>, String) -> Unit
+    private val onSeizureDetected: (String, List<Float>, LocationManager.LocationData?) -> Unit
 ) {
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket: BluetoothSocket? = null
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val locationManager = LocationManager(context)
-    private var lastKnownLocation: Location? = null
+    private var lastKnownLocationData: LocationManager.LocationData? = null
 
     init {
-        locationManager.startLocationUpdates { location ->
-            lastKnownLocation = location
+        locationManager.startLocationUpdates { locationData ->
+            lastKnownLocationData = locationData
         }
     }
 
@@ -106,7 +106,7 @@ class BluetoothClient(
                                     val data = jsonObject.getJSONArray("data")
                                     val dataList = MutableList(data.length()) { data.getDouble(it).toFloat() }
                                     val timestamp = jsonObject.getString("timestamp")
-                                    onSeizureDetected(timestamp, dataList, getLocation())
+                                    onSeizureDetected(timestamp, dataList, lastKnownLocationData)
                                 }
                                 onMessageReceived(messageBuffer.toString())
                                 messageBuffer.clear()
@@ -123,9 +123,11 @@ class BluetoothClient(
         }.start()
     }
 
-    private fun getLocation(): String {
-        return lastKnownLocation?.let { location ->
-            "Latitude: ${location.latitude}, Longitude: ${location.longitude}"
+    private fun getLocationString(): String {
+        return lastKnownLocationData?.let { locationData ->
+            "Latitude: ${locationData.location.latitude}, " +
+                    "Longitude: ${locationData.location.longitude}, " +
+                    "Address: ${locationData.address}"
         } ?: "Location unavailable"
     }
 
@@ -156,7 +158,7 @@ class BluetoothService : Service() {
 
     companion object {
         var dataCallback: ((String) -> Unit)? = null
-        var seizureCallback: ((String, List<Float>, String) -> Unit)? = null
+        var seizureCallback: ((String, List<Float>, LocationManager.LocationData?) -> Unit)? = null
         var isAppInForeground = false
     }
 
@@ -177,28 +179,34 @@ class BluetoothService : Service() {
         )
     }
 
-    private fun handleSeizureDetection(timestamp: String, data: List<Float>, location: String) {
+    private fun handleSeizureDetection(timestamp: String, data: List<Float>, locationData: LocationManager.LocationData?) {
         // Show push notification
-        val notification = createSeizureNotification(timestamp)
+        val notification = createSeizureNotification(timestamp, locationData)
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(2, notification)
 
         // Log data and save to Firestore
-        logSeizureData(timestamp, data, location)
+        logSeizureData(timestamp, data, locationData)
 
         // Invoke callback
-        seizureCallback?.invoke(timestamp, data, location)
+        seizureCallback?.invoke(timestamp, data, locationData)
     }
 
-    private fun createSeizureNotification(timestamp: String): Notification {
+    private fun createSeizureNotification(timestamp: String, locationData: LocationManager.LocationData?): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        val locationString = locationData?.let {
+            "Location: ${it.location.latitude}, ${it.location.longitude}\nAddress: ${it.address}"
+        } ?: "Location unavailable"
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Seizure Detected")
             .setContentText("A seizure was detected at $timestamp")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("A seizure was detected at $timestamp\n$locationString"))
             .setSmallIcon(R.drawable.ic_dialog_alert)
             .setContentIntent(pendingIntent)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
@@ -207,14 +215,14 @@ class BluetoothService : Service() {
             .build()
     }
 
-    private fun logSeizureData(timestamp: String, data: List<Float>, location: String) {
-        // Implement Firestore logging here
-        // For example:
+    private fun logSeizureData(timestamp: String, data: List<Float>, locationData: LocationManager.LocationData?) {
         val db = FirebaseFirestore.getInstance()
         val seizureData = hashMapOf(
             "timestamp" to timestamp,
             "eegData" to data,
-            "location" to location
+            "latitude" to locationData?.location?.latitude,
+            "longitude" to locationData?.location?.longitude,
+            "address" to locationData?.address
         )
 
         db.collection("seizures")
@@ -226,7 +234,6 @@ class BluetoothService : Service() {
                 Log.w("Firestore", "Error adding document", e)
             }
     }
-
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification("Bluetooth Service Running")

@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.example.brainwave.bluetooth.BluetoothClient
+import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,11 @@ import org.json.JSONObject
 
 
 @Composable
-fun BluetoothReceiver(context: Context, receivedData: String, seizureData: Triple<String, List<Float>, String>?) {
+fun BluetoothReceiver(
+    context: Context,
+    receivedData: String,
+    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
+) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
 
@@ -46,10 +51,14 @@ fun BluetoothReceiver(context: Context, receivedData: String, seizureData: Tripl
         Text("EEG Graph")
         EEGGraph(dataPoints)
 
-        seizureData?.let { (timestamp, data, location) ->
+        seizureData?.let { (timestamp, data, locationData) ->
             Text("Seizure Detected", style = MaterialTheme.typography.headlineSmall)
             Text("Timestamp: $timestamp")
-            Text("Location: $location")
+            locationData?.let { location ->
+                Text("Latitude: ${location.location.latitude}")
+                Text("Longitude: ${location.location.longitude}")
+                Text("Address: ${location.address}")
+            } ?: Text("Location unavailable")
             Text("EEG Data: ${data.take(10)}...")
         }
     }

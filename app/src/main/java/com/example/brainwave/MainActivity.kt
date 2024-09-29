@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import com.example.brainwave.bluetooth.BluetoothService
+import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import com.google.firebase.FirebaseApp
@@ -19,7 +20,7 @@ import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
     private val receivedData = mutableStateOf("")
-    private val seizureData = mutableStateOf<Triple<String, List<Float>, String>?>(null)
+    private val seizureData = mutableStateOf<Triple<String, List<Float>, LocationManager.LocationData?>?>(null)
     private val db by lazy { Firebase.firestore }
 
     private val requestPermissionLauncher =
