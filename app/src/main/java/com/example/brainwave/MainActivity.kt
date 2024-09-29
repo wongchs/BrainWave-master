@@ -7,8 +7,12 @@ import com.example.brainwave.ui.BluetoothReceiver
 import com.example.brainwave.utils.requestBluetoothPermissions
 import android.content.Intent
 import android.os.Build
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import com.example.brainwave.bluetooth.BluetoothService
+import com.example.brainwave.utils.arePermissionsGranted
+import com.example.brainwave.utils.requiredPermissions
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -18,10 +22,25 @@ class MainActivity : ComponentActivity() {
     private val seizureData = mutableStateOf<Triple<String, List<Float>, String>?>(null)
     private val db by lazy { Firebase.firestore }
 
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            if (permissions.all { it.value }) {
+                startBluetoothService()
+            } else {
+                Toast.makeText(this, "Permissions are required for the app to function properly", Toast.LENGTH_LONG).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
-        requestBluetoothPermissions(this)
+
+        if (arePermissionsGranted(this, requiredPermissions)) {
+            startBluetoothService()
+        } else {
+            requestPermissionLauncher.launch(requiredPermissions)
+        }
+
         BluetoothService.dataCallback = { data ->
             receivedData.value = data
         }
@@ -32,7 +51,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             BluetoothReceiver(this, receivedData.value, seizureData.value)
         }
-        startBluetoothService()
     }
 
     private fun startBluetoothService() {

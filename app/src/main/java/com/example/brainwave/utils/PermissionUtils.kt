@@ -10,7 +10,8 @@ import androidx.activity.ComponentActivity
 val requiredPermissions = arrayOf(
     Manifest.permission.BLUETOOTH,
     Manifest.permission.BLUETOOTH_ADMIN,
-    Manifest.permission.ACCESS_FINE_LOCATION
+    Manifest.permission.ACCESS_FINE_LOCATION,
+    Manifest.permission.ACCESS_COARSE_LOCATION
 )
 
 fun arePermissionsGranted(context: Context, permissions: Array<String>): Boolean {

@@ -22,7 +22,9 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.brainwave.MainActivity
 import android.R
+import android.location.Location
 import android.media.RingtoneManager
+import com.example.brainwave.utils.LocationManager
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONObject
 
@@ -34,6 +36,14 @@ class BluetoothClient(
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket: BluetoothSocket? = null
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private val locationManager = LocationManager(context)
+    private var lastKnownLocation: Location? = null
+
+    init {
+        locationManager.startLocationUpdates { location ->
+            lastKnownLocation = location
+        }
+    }
 
     fun connectToServer() {
         if (bluetoothAdapter == null) {
@@ -114,9 +124,9 @@ class BluetoothClient(
     }
 
     private fun getLocation(): String {
-        // Implement location retrieval logic here
-        // For simplicity, we'll return a dummy location
-        return "Latitude: 40.7128, Longitude: -74.0060"
+        return lastKnownLocation?.let { location ->
+            "Latitude: ${location.latitude}, Longitude: ${location.longitude}"
+        } ?: "Location unavailable"
     }
 
     private fun isValidJson(json: String): Boolean {
