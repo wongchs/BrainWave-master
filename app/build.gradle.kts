@@ -75,4 +75,5 @@ dependencies {
     implementation("org.json:json:20210307")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("androidx.navigation:navigation-compose:2.8.1")
 }

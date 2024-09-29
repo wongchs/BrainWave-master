@@ -107,6 +107,4 @@ class LocationManager(private val context: Context) {
         val location: Location,
         val address: String
     )
-
-
 }

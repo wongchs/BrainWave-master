@@ -10,7 +10,12 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.brainwave.bluetooth.BluetoothService
+import com.example.brainwave.ui.MainScreen
+import com.example.brainwave.ui.SeizureHistoryScreen
 import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
@@ -50,9 +55,23 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            BluetoothReceiver(this, receivedData.value, seizureData.value)
+            val navController = rememberNavController()
+            NavHost(navController = navController, startDestination = "main") {
+                composable("main") {
+                    MainScreen(
+                        context = this@MainActivity,
+                        receivedData = receivedData.value,
+                        seizureData = seizureData.value,
+                        onViewHistoryClick = { navController.navigate("history") }
+                    )
+                }
+                composable("history") {
+                    SeizureHistoryScreen(onBackClick = { navController.navigateUp() })
+                }
+            }
         }
     }
+
 
     private fun startBluetoothService() {
         val serviceIntent = Intent(this, BluetoothService::class.java)
