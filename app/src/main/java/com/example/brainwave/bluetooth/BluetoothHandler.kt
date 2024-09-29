@@ -25,6 +25,7 @@ import android.R
 import android.location.Location
 import android.media.RingtoneManager
 import com.example.brainwave.utils.LocationManager
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONObject
 
@@ -217,22 +218,29 @@ class BluetoothService : Service() {
 
     private fun logSeizureData(timestamp: String, data: List<Float>, locationData: LocationManager.LocationData?) {
         val db = FirebaseFirestore.getInstance()
-        val seizureData = hashMapOf(
-            "timestamp" to timestamp,
-            "eegData" to data,
-            "latitude" to locationData?.location?.latitude,
-            "longitude" to locationData?.location?.longitude,
-            "address" to locationData?.address
-        )
+        val currentUser = FirebaseAuth.getInstance().currentUser
 
-        db.collection("seizures")
-            .add(seizureData)
-            .addOnSuccessListener { documentReference ->
-                Log.d("Firestore", "DocumentSnapshot added with ID: ${documentReference.id}")
-            }
-            .addOnFailureListener { e ->
-                Log.w("Firestore", "Error adding document", e)
-            }
+        if (currentUser != null) {
+            val seizureData = hashMapOf(
+                "userId" to currentUser.uid,
+                "timestamp" to timestamp,
+                "eegData" to data,
+                "latitude" to locationData?.location?.latitude,
+                "longitude" to locationData?.location?.longitude,
+                "address" to locationData?.address
+            )
+
+            db.collection("seizures")
+                .add(seizureData)
+                .addOnSuccessListener { documentReference ->
+                    Log.d("Firestore", "DocumentSnapshot added with ID: ${documentReference.id}")
+                }
+                .addOnFailureListener { e ->
+                    Log.w("Firestore", "Error adding document", e)
+                }
+        } else {
+            Log.w("Firestore", "User not authenticated, seizure data not saved")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

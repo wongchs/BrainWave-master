@@ -9,17 +9,21 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.brainwave.bluetooth.BluetoothService
+import com.example.brainwave.ui.AuthScreen
 import com.example.brainwave.ui.MainScreen
 import com.example.brainwave.ui.SeizureHistoryScreen
 import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -27,6 +31,8 @@ class MainActivity : ComponentActivity() {
     private val receivedData = mutableStateOf("")
     private val seizureData = mutableStateOf<Triple<String, List<Float>, LocationManager.LocationData?>?>(null)
     private val db by lazy { Firebase.firestore }
+    private val auth by lazy { FirebaseAuth.getInstance() }
+    private val currentUser = mutableStateOf<FirebaseUser?>(null)
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -56,13 +62,30 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val navController = rememberNavController()
-            NavHost(navController = navController, startDestination = "main") {
+
+            NavHost(navController = navController, startDestination = "auth") {
+                composable("auth") {
+                    if (currentUser.value != null) {
+                        LaunchedEffect(Unit) {
+                            navController.navigate("main")
+                        }
+                    } else {
+                        AuthScreen(
+                            onAuthSuccess = { navController.navigate("main") }
+                        )
+                    }
+                }
                 composable("main") {
                     MainScreen(
                         context = this@MainActivity,
                         receivedData = receivedData.value,
                         seizureData = seizureData.value,
-                        onViewHistoryClick = { navController.navigate("history") }
+                        onViewHistoryClick = { navController.navigate("history") },
+                        onLogout = {
+                            auth.signOut()
+                            currentUser.value = null
+                            navController.navigate("auth")
+                        }
                     )
                 }
                 composable("history") {
@@ -70,8 +93,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
 
+        auth.addAuthStateListener { firebaseAuth ->
+            currentUser.value = firebaseAuth.currentUser
+        }
+    }
 
     private fun startBluetoothService() {
         val serviceIntent = Intent(this, BluetoothService::class.java)

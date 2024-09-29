@@ -18,7 +18,8 @@ fun MainScreen(
     context: Context,
     receivedData: String,
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
-    onViewHistoryClick: () -> Unit
+    onViewHistoryClick: () -> Unit,
+    onLogout: () -> Unit
 ) {
     Column {
         BluetoothReceiver(context, receivedData, seizureData)
@@ -32,6 +33,17 @@ fun MainScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Text("View Seizure History")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text("Logout")
         }
     }
 }

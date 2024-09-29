@@ -19,7 +19,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
@@ -27,20 +29,27 @@ import com.google.firebase.ktx.Firebase
 @Composable
 fun SeizureHistoryScreen(onBackClick: () -> Unit) {
     val seizures = remember { mutableStateOf<List<SeizureEvent>>(emptyList()) }
+    val errorMessage = remember { mutableStateOf<String?>(null) }
     val db = Firebase.firestore
+    val currentUser = FirebaseAuth.getInstance().currentUser
 
     LaunchedEffect(Unit) {
-        db.collection("seizures")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .get()
-            .addOnSuccessListener { result ->
-                seizures.value = result.mapNotNull { document ->
-                    document.toObject(SeizureEvent::class.java)
+        if (currentUser != null) {
+            db.collection("seizures")
+                .whereEqualTo("userId", currentUser.uid)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener { result ->
+                    seizures.value = result.mapNotNull { document ->
+                        document.toObject(SeizureEvent::class.java)
+                    }
+                    errorMessage.value = null
                 }
-            }
-            .addOnFailureListener { exception ->
-                Log.w("SeizureHistory", "Error getting documents.", exception)
-            }
+                .addOnFailureListener { exception ->
+                    Log.w("SeizureHistory", "Error getting documents.", exception)
+                    errorMessage.value = "Failed to load seizure history. Please try again later."
+                }
+        }
     }
 
     Column {
@@ -53,9 +62,22 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit) {
             }
         )
 
-        LazyColumn {
-            items(seizures.value) { seizure ->
-                SeizureEventItem(seizure)
+        if (errorMessage.value != null) {
+            Text(
+                text = errorMessage.value!!,
+                color = Color.Red,
+                modifier = Modifier.padding(16.dp)
+            )
+        } else if (seizures.value.isEmpty()) {
+            Text(
+                text = "No seizure history found.",
+                modifier = Modifier.padding(16.dp)
+            )
+        } else {
+            LazyColumn {
+                items(seizures.value) { seizure ->
+                    SeizureEventItem(seizure)
+                }
             }
         }
     }
