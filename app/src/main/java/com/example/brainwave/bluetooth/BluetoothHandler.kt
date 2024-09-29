@@ -1,5 +1,6 @@
 package com.example.brainwave.bluetooth
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -22,8 +23,12 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.brainwave.MainActivity
 import android.R
+import android.content.pm.PackageManager
 import android.location.Location
 import android.media.RingtoneManager
+import android.telephony.SmsManager
+import androidx.core.content.ContextCompat
+import com.example.brainwave.ui.EmergencyContact
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -191,6 +196,8 @@ class BluetoothService : Service() {
 
         // Invoke callback
         seizureCallback?.invoke(timestamp, data, locationData)
+
+        sendSMSNotifications(timestamp, locationData)
     }
 
     private fun createSeizureNotification(timestamp: String, locationData: LocationManager.LocationData?): Notification {
@@ -295,4 +302,51 @@ class BluetoothService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun sendSMSNotifications(timestamp: String, locationData: LocationManager.LocationData?) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            FirebaseFirestore.getInstance()
+                .collection("users").document(currentUser.uid)
+                .collection("emergencyContacts")
+                .get()
+                .addOnSuccessListener { documents ->
+                    for (document in documents) {
+                        val contact = document.toObject(EmergencyContact::class.java)
+                        sendSMS(contact.phoneNumber, createSMSMessage(timestamp, locationData))
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    Log.w("Firestore", "Error getting emergency contacts", exception)
+                }
+        }
+    }
+
+    private fun sendSMS(phoneNumber: String, message: String) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                Log.d("SMS", "Attempting to send SMS to $phoneNumber")
+                val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    this.getSystemService(SmsManager::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    SmsManager.getDefault()
+                }
+                smsManager.sendTextMessage(phoneNumber, null, message, null, null)
+                Log.d("SMS", "SMS sent successfully to $phoneNumber")
+            } catch (e: Exception) {
+                Log.e("SMS", "Failed to send SMS to $phoneNumber", e)
+            }
+        } else {
+            Log.e("SMS", "SMS permission not granted")
+        }
+    }
+
+    private fun createSMSMessage(timestamp: String, locationData: LocationManager.LocationData?): String {
+        val locationString = locationData?.let {
+            "Location: ${it.location.latitude}, ${it.location.longitude}\nAddress: ${it.address}"
+        } ?: "Location unavailable"
+
+        return "Seizure detected at $timestamp\n$locationString"
+    }
 }

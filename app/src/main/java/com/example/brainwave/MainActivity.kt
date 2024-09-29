@@ -6,16 +6,19 @@ import androidx.activity.compose.setContent
 import com.example.brainwave.ui.BluetoothReceiver
 import com.example.brainwave.utils.requestBluetoothPermissions
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.ui.AuthScreen
+import com.example.brainwave.ui.EmergencyContactsScreen
 import com.example.brainwave.ui.MainScreen
 import com.example.brainwave.ui.SeizureHistoryScreen
 import com.example.brainwave.utils.LocationManager
@@ -46,6 +49,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
+        requestRequiredPermissions()
 
         if (arePermissionsGranted(this, requiredPermissions)) {
             startBluetoothService()
@@ -75,12 +79,16 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+                composable("emergency_contacts") {
+                    EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
+                }
                 composable("main") {
                     MainScreen(
                         context = this@MainActivity,
                         receivedData = receivedData.value,
                         seizureData = seizureData.value,
                         onViewHistoryClick = { navController.navigate("history") },
+                        onViewEmergencyContactsClick = { navController.navigate("emergency_contacts") },
                         onLogout = {
                             auth.signOut()
                             currentUser.value = null
@@ -116,5 +124,21 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         BluetoothService.isAppInForeground = false
+    }
+
+    private fun requestRequiredPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+
+        for (permission in requiredPermissions) {
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(permission)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        } else {
+            startBluetoothService()
+        }
     }
 }

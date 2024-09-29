@@ -19,6 +19,7 @@ fun MainScreen(
     receivedData: String,
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
     onViewHistoryClick: () -> Unit,
+    onViewEmergencyContactsClick: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column {
@@ -33,6 +34,15 @@ fun MainScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Text("View Seizure History")
+        }
+
+        Button(
+            onClick = onViewEmergencyContactsClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text("Manage Emergency Contacts")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
