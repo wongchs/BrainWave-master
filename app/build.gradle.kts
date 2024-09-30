@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -15,6 +17,14 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        val keystoreFile = project.rootProject.file("local.properties")
+        val properties = Properties()
+        properties.load(keystoreFile.inputStream())
+
+        val apiKey = properties.getProperty("MAPS_API_KEY") ?: ""
+
+        manifestPlaceholders["GOOGLE_KEY"] = apiKey
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -73,9 +83,11 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("androidx.compose.material:material:1.4.1")
     implementation("androidx.compose.material3:material3:1.0.1")
-    implementation("org.json:json:20210307")
+    implementation("org.json:json:20240303")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.navigation:navigation-compose:2.8.1")
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("com.google.maps.android:maps-compose:6.1.0")
 }

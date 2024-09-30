@@ -19,8 +19,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -106,6 +108,8 @@ fun SeizureEventItem(seizure: SeizureEvent, onClick: () -> Unit) {
 
 @Composable
 fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
+    var showMap by remember { mutableStateOf(false) }
+
     Column {
         TopAppBar(
             title = { Text("Seizure Detail") },
@@ -120,7 +124,14 @@ fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
             Text("Timestamp: ${seizure.timestamp}", style = MaterialTheme.typography.h6)
             Text("Latitude: ${seizure.latitude}", style = MaterialTheme.typography.body1)
             Text("Longitude: ${seizure.longitude}", style = MaterialTheme.typography.body1)
-            Text("Address: ${seizure.address}", style = MaterialTheme.typography.body1)
+
+            Text(
+                text = "Address: ${seizure.address}",
+                style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.primary),
+                modifier = Modifier
+                    .clickable { showMap = true }
+                    .padding(vertical = 4.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -128,6 +139,15 @@ fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
             seizure.eegData?.let { eegData ->
                 EEGGraph(eegData)
             } ?: Text("No EEG data available")
+        }
+
+        if (showMap) {
+            MapDialog(
+                latitude = seizure.latitude,
+                longitude = seizure.longitude,
+                address = seizure.address,
+                onDismiss = { showMap = false }
+            )
         }
     }
 }

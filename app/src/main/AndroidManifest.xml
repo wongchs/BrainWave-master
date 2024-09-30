@@ -41,5 +41,8 @@
             </intent-filter>
         </activity>
         <service android:name="com.example.brainwave.bluetooth.BluetoothService" />
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_KEY}" />
     </application>
 </manifest>
