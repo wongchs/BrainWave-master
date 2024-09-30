@@ -21,10 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.userProfileChangeRequest
 
 @Composable
 fun AuthScreen(
-    onAuthSuccess: () -> Unit
+    onAuthSuccess: (User) -> Unit
 ) {
     var isLogin by remember { mutableStateOf(true) }
 
@@ -35,9 +36,21 @@ fun AuthScreen(
         verticalArrangement = Arrangement.Center
     ) {
         if (isLogin) {
-            LoginScreen(onLoginSuccess = onAuthSuccess)
+            LoginScreen(onLoginSuccess = { user ->
+                onAuthSuccess(user)
+            })
         } else {
-            SignupScreen(onSignupSuccess = onAuthSuccess)
+            SignupScreen(onSignupSuccess = {
+                val currentUser = FirebaseAuth.getInstance().currentUser
+                if (currentUser != null) {
+                    val user = User(
+                        id = currentUser.uid,
+                        email = currentUser.email ?: "",
+                        name = currentUser.displayName ?: ""
+                    )
+                    onAuthSuccess(user)
+                }
+            })
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -52,12 +65,19 @@ fun AuthScreen(
 
 @Composable
 fun SignupScreen(onSignupSuccess: () -> Unit) {
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
     Column {
+        TextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Name") },
+            isError = errorMessage != null
+        )
         TextField(
             value = email,
             onValueChange = { email = it },
@@ -78,19 +98,32 @@ fun SignupScreen(onSignupSuccess: () -> Unit) {
             onClick = {
                 isLoading = true
                 errorMessage = null
-                if (isValidEmail(email) && isValidPassword(password)) {
+                if (isValidName(name) && isValidEmail(email) && isValidPassword(password)) {
                     FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
                         .addOnCompleteListener { task ->
-                            isLoading = false
                             if (task.isSuccessful) {
-                                onSignupSuccess()
+                                val user = FirebaseAuth.getInstance().currentUser
+                                val profileUpdates = userProfileChangeRequest {
+                                    displayName = name
+                                }
+                                user?.updateProfile(profileUpdates)
+                                    ?.addOnCompleteListener { profileTask ->
+                                        isLoading = false
+                                        if (profileTask.isSuccessful) {
+                                            onSignupSuccess()
+                                        } else {
+                                            errorMessage = profileTask.exception?.message
+                                                ?: "Failed to set user name"
+                                        }
+                                    }
                             } else {
+                                isLoading = false
                                 errorMessage = task.exception?.message ?: "Signup failed"
                             }
                         }
                 } else {
                     isLoading = false
-                    errorMessage = "Invalid email or password"
+                    errorMessage = "Invalid name, email or password"
                 }
             },
             enabled = !isLoading
@@ -101,7 +134,7 @@ fun SignupScreen(onSignupSuccess: () -> Unit) {
 }
 
 @Composable
-fun LoginScreen(onLoginSuccess: () -> Unit) {
+fun LoginScreen(onLoginSuccess: (User) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -132,7 +165,15 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     .addOnCompleteListener { task ->
                         isLoading = false
                         if (task.isSuccessful) {
-                            onLoginSuccess()
+                            val currentUser = FirebaseAuth.getInstance().currentUser
+                            if (currentUser != null) {
+                                val user = User(
+                                    id = currentUser.uid,
+                                    email = currentUser.email ?: "",
+                                    name = currentUser.displayName ?: ""
+                                )
+                                onLoginSuccess(user)
+                            }
                         } else {
                             errorMessage = task.exception?.message ?: "Login failed"
                         }
@@ -150,5 +191,9 @@ fun isValidEmail(email: String): Boolean {
 }
 
 fun isValidPassword(password: String): Boolean {
-    return password.length >= 6 // You can add more password strength checks here
+    return password.length >= 6
+}
+
+fun isValidName(name: String): Boolean {
+    return name.isNotBlank() && name.length >= 2
 }
