@@ -26,17 +26,20 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.ui.AuthScreen
+import com.example.brainwave.ui.EditProfileScreen
 import com.example.brainwave.ui.EmergencyContactsScreen
 import com.example.brainwave.ui.MainScreen
 import com.example.brainwave.ui.SeizureDetailScreen
 import com.example.brainwave.ui.SeizureEvent
 import com.example.brainwave.ui.SeizureHistoryScreen
+import com.example.brainwave.ui.User
 import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -104,6 +107,7 @@ class MainActivity : ComponentActivity() {
                         seizureData = seizureData.value,
                         onViewHistoryClick = { navController.navigate("history") },
                         onViewEmergencyContactsClick = { navController.navigate("emergency_contacts") },
+                        onEditProfileClick = { navController.navigate("edit_profile") },
                         onLogout = {
                             auth.signOut()
                             currentUser.value = null
@@ -172,6 +176,46 @@ class MainActivity : ComponentActivity() {
 
                 }
 
+                composable("edit_profile") {
+                    var isLoading by remember { mutableStateOf(false) }
+                    var errorMessage by remember { mutableStateOf<String?>(null) }
+                    var successMessage by remember { mutableStateOf<String?>(null) }
+
+                    EditProfileScreen(
+                        user = currentUser.value?.let { firebaseUser ->
+                            User(
+                                firebaseUser.uid,
+                                firebaseUser.email ?: "",
+                                firebaseUser.displayName ?: ""
+                            )
+                        } ?: User(),
+                        isLoading = isLoading,
+                        errorMessage = errorMessage,
+                        successMessage = successMessage,
+                        onSaveProfile = { updatedUser ->
+                            isLoading = true
+                            errorMessage = null
+                            successMessage = null
+
+                            val profileUpdates = userProfileChangeRequest {
+                                displayName = updatedUser.name
+                            }
+                            currentUser.value?.updateProfile(profileUpdates)
+                                ?.addOnCompleteListener { task ->
+                                    isLoading = false
+                                    if (task.isSuccessful) {
+                                        currentUser.value = auth.currentUser
+                                        successMessage = "Profile updated successfully"
+                                    } else {
+                                        errorMessage =
+                                            task.exception?.message ?: "Failed to update profile"
+                                    }
+                                }
+                        },
+                        onBackClick = { navController.navigateUp() }
+                    )
+                }
+
                 auth.addAuthStateListener { firebaseAuth ->
                     currentUser.value = firebaseAuth.currentUser
                 }
@@ -211,3 +255,4 @@ class MainActivity : ComponentActivity() {
     }
 
 }
+

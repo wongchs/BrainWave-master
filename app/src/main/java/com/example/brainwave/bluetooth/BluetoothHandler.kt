@@ -110,7 +110,8 @@ class BluetoothClient(
                                 val jsonObject = JSONObject(messageBuffer.toString())
                                 if (jsonObject.has("seizure_detected") && jsonObject.getBoolean("seizure_detected")) {
                                     val data = jsonObject.getJSONArray("data")
-                                    val dataList = MutableList(data.length()) { data.getDouble(it).toFloat() }
+                                    val dataList =
+                                        MutableList(data.length()) { data.getDouble(it).toFloat() }
                                     val timestamp = jsonObject.getString("timestamp")
                                     onSeizureDetected(timestamp, dataList, lastKnownLocationData)
                                 }
@@ -145,7 +146,6 @@ class BluetoothClient(
             return false
         }
     }
-
 
 
     fun disconnect() {
@@ -185,10 +185,15 @@ class BluetoothService : Service() {
         )
     }
 
-    private fun handleSeizureDetection(timestamp: String, data: List<Float>, locationData: LocationManager.LocationData?) {
+    private fun handleSeizureDetection(
+        timestamp: String,
+        data: List<Float>,
+        locationData: LocationManager.LocationData?
+    ) {
         // Show push notification
         val notification = createSeizureNotification(timestamp, locationData)
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(2, notification)
 
         // Log data and save to Firestore
@@ -200,7 +205,10 @@ class BluetoothService : Service() {
         seizureCallback?.invoke(timestamp, data, locationData)
     }
 
-    private fun createSeizureNotification(timestamp: String, locationData: LocationManager.LocationData?): Notification {
+    private fun createSeizureNotification(
+        timestamp: String,
+        locationData: LocationManager.LocationData?
+    ): Notification {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
@@ -213,8 +221,10 @@ class BluetoothService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Seizure Detected")
             .setContentText("A seizure was detected at $timestamp")
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("A seizure was detected at $timestamp\n$locationString"))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("A seizure was detected at $timestamp\n$locationString")
+            )
             .setSmallIcon(R.drawable.ic_dialog_alert)
             .setContentIntent(pendingIntent)
             .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
@@ -223,7 +233,11 @@ class BluetoothService : Service() {
             .build()
     }
 
-    private fun logSeizureData(timestamp: String, data: List<Float>, locationData: LocationManager.LocationData?) {
+    private fun logSeizureData(
+        timestamp: String,
+        data: List<Float>,
+        locationData: LocationManager.LocationData?
+    ) {
         val db = FirebaseFirestore.getInstance()
         val currentUser = FirebaseAuth.getInstance().currentUser
 
@@ -303,7 +317,10 @@ class BluetoothService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun sendSMSNotifications(timestamp: String, locationData: LocationManager.LocationData?) {
+    private fun sendSMSNotifications(
+        timestamp: String,
+        locationData: LocationManager.LocationData?
+    ) {
         val currentUser = FirebaseAuth.getInstance().currentUser
         if (currentUser != null) {
             FirebaseFirestore.getInstance()
@@ -327,8 +344,13 @@ class BluetoothService : Service() {
     }
 
 
-    private fun createSMSMessage(timestamp: String, locationData: LocationManager.LocationData?): String {
-        val baseMessage = "Seizure detected at $timestamp"
+    private fun createSMSMessage(
+        timestamp: String,
+        locationData: LocationManager.LocationData?
+    ): String {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        val userName = currentUser?.displayName ?: "Unknown User"
+        val baseMessage = "Seizure detected for $userName at $timestamp"
         val locationString = locationData?.let {
             "\nLocation: ${it.location.latitude}, ${it.location.longitude}" +
                     "\nAddress: ${it.address}"
