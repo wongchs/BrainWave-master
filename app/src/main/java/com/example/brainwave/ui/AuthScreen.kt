@@ -22,6 +22,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.userProfileChangeRequest
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 
 @Composable
 fun AuthScreen(
@@ -99,28 +101,18 @@ fun SignupScreen(onSignupSuccess: () -> Unit) {
                 isLoading = true
                 errorMessage = null
                 if (isValidName(name) && isValidEmail(email) && isValidPassword(password)) {
-                    FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
-                        .addOnCompleteListener { task ->
-                            if (task.isSuccessful) {
-                                val user = FirebaseAuth.getInstance().currentUser
-                                val profileUpdates = userProfileChangeRequest {
-                                    displayName = name
-                                }
-                                user?.updateProfile(profileUpdates)
-                                    ?.addOnCompleteListener { profileTask ->
-                                        isLoading = false
-                                        if (profileTask.isSuccessful) {
-                                            onSignupSuccess()
-                                        } else {
-                                            errorMessage = profileTask.exception?.message
-                                                ?: "Failed to set user name"
-                                        }
-                                    }
-                            } else {
+                    checkEmailAvailability(email) { isAvailable, error ->
+                        if (isAvailable) {
+                            createAccount(name, email, password, onSignupSuccess) { error ->
                                 isLoading = false
-                                errorMessage = task.exception?.message ?: "Signup failed"
+                                errorMessage = error
                             }
+                        } else {
+                            isLoading = false
+                            errorMessage = error
+                                ?: "This email is already registered. Please use a different email."
                         }
+                    }
                 } else {
                     isLoading = false
                     errorMessage = "Invalid name, email or password"
@@ -131,6 +123,60 @@ fun SignupScreen(onSignupSuccess: () -> Unit) {
             if (isLoading) CircularProgressIndicator() else Text("Sign Up")
         }
     }
+}
+
+private fun checkEmailAvailability(email: String, callback: (Boolean, String?) -> Unit) {
+    FirebaseAuth.getInstance().signInWithEmailAndPassword(email, "dummyPassword")
+        .addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                FirebaseAuth.getInstance().signOut()
+                callback(false, null)
+            } else {
+                val exception = task.exception
+                if (exception is FirebaseAuthInvalidUserException) {
+                    callback(true, null)
+                } else if (exception is FirebaseAuthInvalidCredentialsException) {
+                    callback(false, null)
+                } else {
+                    callback(
+                        false,
+                        exception?.message ?: "An error occurred while checking email availability"
+                    )
+                }
+            }
+        }
+}
+
+private fun createAccount(
+    name: String,
+    email: String,
+    password: String,
+    onSignupSuccess: () -> Unit,
+    onError: (String) -> Unit
+) {
+    FirebaseAuth.getInstance().createUserWithEmailAndPassword(email, password)
+        .addOnCompleteListener { task ->
+            if (task.isSuccessful) {
+                val user = FirebaseAuth.getInstance().currentUser
+                val profileUpdates = userProfileChangeRequest {
+                    displayName = name
+                }
+                user?.updateProfile(profileUpdates)
+                    ?.addOnCompleteListener { profileTask ->
+                        if (profileTask.isSuccessful) {
+                            onSignupSuccess()
+                        } else {
+                            onError(profileTask.exception?.message ?: "Failed to set user name")
+                        }
+                    }
+            } else {
+                val errorMessage = when (task.exception) {
+                    is FirebaseAuthInvalidCredentialsException -> "Invalid email format"
+                    else -> task.exception?.message ?: "Signup failed"
+                }
+                onError(errorMessage)
+            }
+        }
 }
 
 @Composable
