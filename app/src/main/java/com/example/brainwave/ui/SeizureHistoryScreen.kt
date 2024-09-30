@@ -9,14 +9,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.Card
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,6 +33,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent) -> Unit) {
     val seizures = remember { mutableStateOf<List<SeizureEvent>>(emptyList()) }
@@ -90,22 +93,22 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent)
 
 @Composable
 fun SeizureEventItem(seizure: SeizureEvent, onClick: () -> Unit) {
-    Card(
+    ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
             .clickable(onClick = onClick),
-        elevation = 4.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Timestamp: ${seizure.timestamp}", style = MaterialTheme.typography.h6)
-            Text("Latitude: ${seizure.latitude}", style = MaterialTheme.typography.body1)
-            Text("Longitude: ${seizure.longitude}", style = MaterialTheme.typography.body1)
-            Text("Address: ${seizure.address}", style = MaterialTheme.typography.body1)
+            Text("Timestamp: ${seizure.timestamp}", style = MaterialTheme.typography.titleLarge)
+            Text("Latitude: ${seizure.latitude}", style = MaterialTheme.typography.bodyLarge)
+            Text("Longitude: ${seizure.longitude}", style = MaterialTheme.typography.bodyLarge)
+            Text("Address: ${seizure.address}", style = MaterialTheme.typography.bodyLarge)
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
     var showMap by remember { mutableStateOf(false) }
@@ -121,13 +124,13 @@ fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
         )
 
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("Timestamp: ${seizure.timestamp}", style = MaterialTheme.typography.h6)
-            Text("Latitude: ${seizure.latitude}", style = MaterialTheme.typography.body1)
-            Text("Longitude: ${seizure.longitude}", style = MaterialTheme.typography.body1)
+            Text("Timestamp: ${seizure.timestamp}", style = MaterialTheme.typography.titleLarge)
+            Text("Latitude: ${seizure.latitude}", style = MaterialTheme.typography.bodyLarge)
+            Text("Longitude: ${seizure.longitude}", style = MaterialTheme.typography.bodyLarge)
 
             Text(
                 text = "Address: ${seizure.address}",
-                style = MaterialTheme.typography.body1.copy(color = MaterialTheme.colors.primary),
+                style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
                 modifier = Modifier
                     .clickable { showMap = true }
                     .padding(vertical = 4.dp)
@@ -135,7 +138,7 @@ fun SeizureDetailScreen(seizure: SeizureEvent, onBackClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("EEG Data", style = MaterialTheme.typography.h6)
+            Text("EEG Data", style = MaterialTheme.typography.titleLarge)
             seizure.eegData?.let { eegData ->
                 EEGGraph(eegData)
             } ?: Text("No EEG data available")
