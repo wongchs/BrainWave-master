@@ -38,6 +38,11 @@ import android.os.Environment
 import android.widget.Toast
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.core.content.FileProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +52,8 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent)
     val db = Firebase.firestore
     val currentUser = FirebaseAuth.getInstance().currentUser
     val context = LocalContext.current
+    var showShareDialog by remember { mutableStateOf(false) }
+    var downloadedFileUri by remember { mutableStateOf<Uri?>(null) }
 
     fun downloadSeizureHistory() {
         if (seizures.value.isEmpty()) {
@@ -76,10 +83,55 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent)
             resolver.openOutputStream(it)?.use { outputStream ->
                 outputStream.write(csvData.toByteArray())
             }
-            Toast.makeText(context, "Seizure history downloaded successfully", Toast.LENGTH_SHORT)
-                .show()
-        } ?: Toast.makeText(context, "Failed to download seizure history", Toast.LENGTH_SHORT)
-            .show()
+            downloadedFileUri = it
+            showShareDialog = true
+            Toast.makeText(context, "Seizure history downloaded as $fileName", Toast.LENGTH_LONG).show()
+        } ?: Toast.makeText(context, "Failed to download seizure history", Toast.LENGTH_SHORT).show()
+    }
+
+    fun openFile() {
+        downloadedFileUri?.let { uri ->
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "text/csv")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Open CSV file"))
+        }
+    }
+
+    fun shareFile() {
+        downloadedFileUri?.let { uri ->
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share CSV file"))
+        }
+    }
+
+    if (showShareDialog) {
+        AlertDialog(
+            onDismissRequest = { showShareDialog = false },
+            title = { Text("File Downloaded") },
+            text = { Text("Your seizure history has been downloaded. What would you like to do next?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    openFile()
+                    showShareDialog = false
+                }) {
+                    Text("Open File")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    shareFile()
+                    showShareDialog = false
+                }) {
+                    Text("Share File")
+                }
+            }
+        )
     }
 
     LaunchedEffect(Unit) {
