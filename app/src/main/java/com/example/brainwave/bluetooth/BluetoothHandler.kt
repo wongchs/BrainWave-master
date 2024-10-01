@@ -25,6 +25,7 @@ import com.example.brainwave.MainActivity
 import android.R
 import android.content.pm.PackageManager
 import android.location.Location
+import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
@@ -159,8 +160,9 @@ class BluetoothClient(
 
 class BluetoothService : Service() {
     private lateinit var bluetoothClient: BluetoothClient
-    private val CHANNEL_ID = "BluetoothServiceChannel"
     private val NOTIFICATION_ID = 1
+    private val CHANNEL_ID_SEIZURE = "SeizureAlertChannel"
+    private val CHANNEL_ID_EEG = "EEGDataChannel"
 
     companion object {
         var dataCallback: ((String) -> Unit)? = null
@@ -170,7 +172,8 @@ class BluetoothService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        createSeizureAlertChannel()
+        createEEGDataChannel()
         bluetoothClient = BluetoothClient(
             this,
             { message ->
@@ -218,7 +221,9 @@ class BluetoothService : Service() {
             "Location: ${it.location.latitude}, ${it.location.longitude}\nAddress: ${it.address}"
         } ?: "Location unavailable"
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val vibrationPattern = longArrayOf(0, 500, 200, 500)
+
+        return NotificationCompat.Builder(this, CHANNEL_ID_SEIZURE)
             .setContentTitle("Seizure Detected")
             .setContentText("A seizure was detected at $timestamp")
             .setStyle(
@@ -227,7 +232,8 @@ class BluetoothService : Service() {
             )
             .setSmallIcon(R.drawable.ic_dialog_alert)
             .setContentIntent(pendingIntent)
-            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .setVibrate(vibrationPattern)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
@@ -273,12 +279,33 @@ class BluetoothService : Service() {
         return START_STICKY
     }
 
-    private fun createNotificationChannel() {
+    private fun createSeizureAlertChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Bluetooth Service Channel"
-            val descriptionText = "Channel for Bluetooth Service notifications"
+            val name = "Seizure Alert Channel"
+            val descriptionText = "Channel for Seizure Alert notifications"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(CHANNEL_ID_SEIZURE, name, importance).apply {
+                description = descriptionText
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 500, 200, 500)
+                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build())
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createEEGDataChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "EEG Data Channel"
+            val descriptionText = "Channel for EEG Data notifications"
             val importance = NotificationManager.IMPORTANCE_LOW
-            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+            val channel = NotificationChannel(CHANNEL_ID_EEG, name, importance).apply {
                 description = descriptionText
                 setSound(null, null)
                 enableVibration(false)
@@ -295,7 +322,7 @@ class BluetoothService : Service() {
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID_EEG)
             .setContentTitle("Bluetooth Data")
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_dialog_info)
