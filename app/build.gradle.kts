@@ -74,6 +74,7 @@ dependencies {
     implementation(libs.accompanist.permissions.z)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.storage)
+    implementation(libs.androidx.media3.exoplayer)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

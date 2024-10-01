@@ -32,6 +32,12 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import android.content.ContentValues
+import android.provider.MediaStore
+import android.os.Environment
+import android.widget.Toast
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +46,41 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent)
     val errorMessage = remember { mutableStateOf<String?>(null) }
     val db = Firebase.firestore
     val currentUser = FirebaseAuth.getInstance().currentUser
+    val context = LocalContext.current
+
+    fun downloadSeizureHistory() {
+        if (seizures.value.isEmpty()) {
+            Toast.makeText(context, "No seizure history to download", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val csvData = buildString {
+            appendLine("ID,Timestamp,Latitude,Longitude,Address,EEG Data")
+            seizures.value.forEach { seizure ->
+                val eegDataString = seizure.eegData?.joinToString(";") ?: "N/A"
+                appendLine("${seizure.id},${seizure.timestamp},${seizure.latitude},${seizure.longitude},\"${seizure.address}\",\"$eegDataString\"")
+            }
+        }
+
+        val fileName = "seizure_history_${System.currentTimeMillis()}.csv"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+        uri?.let {
+            resolver.openOutputStream(it)?.use { outputStream ->
+                outputStream.write(csvData.toByteArray())
+            }
+            Toast.makeText(context, "Seizure history downloaded successfully", Toast.LENGTH_SHORT)
+                .show()
+        } ?: Toast.makeText(context, "Failed to download seizure history", Toast.LENGTH_SHORT)
+            .show()
+    }
 
     LaunchedEffect(Unit) {
         if (currentUser != null) {
@@ -66,6 +107,14 @@ fun SeizureHistoryScreen(onBackClick: () -> Unit, onSeizureClick: (SeizureEvent)
             navigationIcon = {
                 IconButton(onClick = onBackClick) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                IconButton(onClick = { downloadSeizureHistory() }) {
+                    Icon(
+                        Icons.Default.ArrowDropDown,
+                        contentDescription = "Download Seizure History"
+                    )
                 }
             }
         )
