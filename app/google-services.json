@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "307081612459",
+    "project_id": "brainscanner-c7767",
+    "storage_bucket": "brainscanner-c7767.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:307081612459:android:f65bf1157566c65a18bbee",
+        "android_client_info": {
+          "package_name": "com.example.brainwave"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDaxtH2oSwHV_cuWqXnpCBEJHqZcbWYGoo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

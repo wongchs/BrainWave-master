@@ -2,6 +2,7 @@ package com.example.brainwave.ui
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -12,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.example.brainwave.bluetooth.BluetoothClient
+import com.example.brainwave.utils.LocationManager
 import com.example.brainwave.utils.arePermissionsGranted
 import com.example.brainwave.utils.requiredPermissions
 import kotlinx.coroutines.Dispatchers
@@ -19,8 +21,13 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
+
 @Composable
-fun BluetoothReceiver(context: Context, receivedData: String) {
+fun BluetoothReceiver(
+    context: Context,
+    receivedData: String,
+    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
+) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
 
@@ -43,5 +50,16 @@ fun BluetoothReceiver(context: Context, receivedData: String) {
         Text("Status: $message")
         Text("EEG Graph")
         EEGGraph(dataPoints)
+
+        seizureData?.let { (timestamp, data, locationData) ->
+            Text("Seizure Detected", style = MaterialTheme.typography.headlineSmall)
+            Text("Timestamp: $timestamp")
+            locationData?.let { location ->
+                Text("Latitude: ${location.location.latitude}")
+                Text("Longitude: ${location.location.longitude}")
+                Text("Address: ${location.address}")
+            } ?: Text("Location unavailable")
+            Text("EEG Data: ${data.take(10)}...")
+        }
     }
 }
