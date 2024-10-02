@@ -21,9 +21,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.userProfileChangeRequest
 
 @Composable
 fun AuthScreen(
@@ -126,23 +125,26 @@ fun SignupScreen(onSignupSuccess: () -> Unit) {
 }
 
 private fun checkEmailAvailability(email: String, callback: (Boolean, String?) -> Unit) {
-    FirebaseAuth.getInstance().signInWithEmailAndPassword(email, "dummyPassword")
+    FirebaseAuth.getInstance().fetchSignInMethodsForEmail(email)
         .addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                FirebaseAuth.getInstance().signOut()
-                callback(false, null)
-            } else {
-                val exception = task.exception
-                if (exception is FirebaseAuthInvalidUserException) {
+                val signInMethods = task.result?.signInMethods ?: emptyList()
+                if (signInMethods.isEmpty()) {
+                    // Email is not in use
                     callback(true, null)
-                } else if (exception is FirebaseAuthInvalidCredentialsException) {
-                    callback(false, null)
                 } else {
+                    // Email is already in use
                     callback(
                         false,
-                        exception?.message ?: "An error occurred while checking email availability"
+                        "This email is already registered. Please use a different email."
                     )
                 }
+            } else {
+                // An error occurred while checking
+                callback(
+                    false,
+                    task.exception?.message ?: "An error occurred while checking email availability"
+                )
             }
         }
 }
