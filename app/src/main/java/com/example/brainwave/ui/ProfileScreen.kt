@@ -27,15 +27,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-//data class User(
-//    val id: String = "",
-//    val email: String = "",
-//    val name: String = ""
-//)
+data class User(
+    val id: String = "",
+    val email: String = "",
+    val name: String = ""
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditProfileScreen(
+fun ProfileScreen(
     user: User,
     isLoading: Boolean,
     errorMessage: String?,
