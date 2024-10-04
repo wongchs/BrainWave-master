@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
                         context = this@MainActivity,
                         receivedData = receivedData.value,
                         seizureData = seizureData.value,
+                        currentUser = currentUser.value,  // Pass the currentUser here
                         onLogout = {
                             auth.signOut()
                             currentUser.value = null

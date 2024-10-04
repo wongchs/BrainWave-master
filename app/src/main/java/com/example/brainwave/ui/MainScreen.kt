@@ -47,6 +47,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.brainwave.utils.LocationManager
+import com.google.firebase.auth.FirebaseUser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,8 +56,10 @@ fun MainScreen(
     context: Context,
     receivedData: String,
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
+    currentUser: FirebaseUser?,   // Add currentUser as a parameter
     onLogout: () -> Unit,
 ) {
+
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Home", "History", "Contacts", "Profile")
 
@@ -100,10 +103,24 @@ fun MainScreen(
                 )
                 2 -> EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
                 3 -> {
-                    // Navigate to edit profile screen
-                    LaunchedEffect(Unit) {
-                        navController.navigate("edit_profile")
-                    }
+                    EditProfileScreen(
+                        user = currentUser?.let { firebaseUser ->
+                            User(
+                                firebaseUser.uid,
+                                firebaseUser.email ?: "",
+                                firebaseUser.displayName ?: ""
+                            )
+                        } ?: User(),
+                        isLoading = false, // Handle loading logic if necessary
+                        errorMessage = null,
+                        successMessage = null,
+                        onSaveProfile = { updatedUser ->
+                            // Implement save profile logic here
+                        },
+                        onBackClick = {
+                            selectedTab = 0 // Go back to home screen
+                        }
+                    )
                 }
             }
         }
