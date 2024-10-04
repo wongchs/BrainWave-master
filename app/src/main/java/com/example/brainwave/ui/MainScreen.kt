@@ -48,6 +48,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.userProfileChangeRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,10 +57,9 @@ fun MainScreen(
     context: Context,
     receivedData: String,
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
-    currentUser: FirebaseUser?,   // Add currentUser as a parameter
+    currentUser: FirebaseUser?,
     onLogout: () -> Unit,
 ) {
-
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Home", "History", "Contacts", "Profile")
 
@@ -88,45 +88,26 @@ fun MainScreen(
                         },
                         label = { Text(title) },
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index }
+                        onClick = {
+                            selectedTab = index
+                            when (index) {
+                                0 -> {} // Stay on home screen
+                                1 -> navController.navigate("history")
+                                2 -> navController.navigate("emergency_contacts")
+                                3 -> navController.navigate("edit_profile")
+                            }
+                        }
                     )
                 }
             }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            when (selectedTab) {
-                0 -> HomeScreen(context, receivedData, seizureData)
-                1 -> SeizureHistoryScreen(
-                    onBackClick = { navController.navigateUp() },
-                    onSeizureClick = { seizure -> navController.navigate("seizure_detail/${seizure.id}") }
-                )
-                2 -> EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
-                3 -> {
-                    EditProfileScreen(
-                        user = currentUser?.let { firebaseUser ->
-                            User(
-                                firebaseUser.uid,
-                                firebaseUser.email ?: "",
-                                firebaseUser.displayName ?: ""
-                            )
-                        } ?: User(),
-                        isLoading = false, // Handle loading logic if necessary
-                        errorMessage = null,
-                        successMessage = null,
-                        onSaveProfile = { updatedUser ->
-                            // Implement save profile logic here
-                        },
-                        onBackClick = {
-                            selectedTab = 0 // Go back to home screen
-                        }
-                    )
-                }
-            }
+            // Only show HomeScreen here, other screens are handled by NavHost
+            HomeScreen(context, receivedData, seizureData)
         }
     }
 }
-
 
 @Composable
 fun HomeScreen(

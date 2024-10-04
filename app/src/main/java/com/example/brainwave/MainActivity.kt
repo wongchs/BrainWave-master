@@ -181,6 +181,10 @@ class MainActivity : ComponentActivity() {
 
                 }
 
+                composable("emergency_contacts") {
+                    EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
+                }
+
                 composable("edit_profile") {
                     var isLoading by remember { mutableStateOf(false) }
                     var errorMessage by remember { mutableStateOf<String?>(null) }
