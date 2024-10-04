@@ -89,32 +89,36 @@ class MainActivity : ComponentActivity() {
                 composable("auth") {
                     if (currentUser.value != null) {
                         LaunchedEffect(Unit) {
-                            navController.navigate("main")
+                            navController.navigate("main") {
+                                popUpTo("auth") { inclusive = true }
+                            }
                         }
                     } else {
                         AuthScreen(
-                            onAuthSuccess = { navController.navigate("main") }
+                            onAuthSuccess = {
+                                navController.navigate("main") {
+                                    popUpTo("auth") { inclusive = true }
+                                }
+                            }
                         )
                     }
                 }
-                composable("emergency_contacts") {
-                    EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
-                }
                 composable("main") {
                     MainScreen(
+                        navController = navController,
                         context = this@MainActivity,
                         receivedData = receivedData.value,
                         seizureData = seizureData.value,
-                        onViewHistoryClick = { navController.navigate("history") },
-                        onViewEmergencyContactsClick = { navController.navigate("emergency_contacts") },
-                        onEditProfileClick = { navController.navigate("edit_profile") },
                         onLogout = {
                             auth.signOut()
                             currentUser.value = null
-                            navController.navigate("auth")
+                            navController.navigate("auth") {
+                                popUpTo("main") { inclusive = true }
+                            }
                         }
                     )
                 }
+
                 composable("history") {
                     SeizureHistoryScreen(
                         onBackClick = { navController.navigateUp() },
