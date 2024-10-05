@@ -1,20 +1,20 @@
 package com.example.brainwave.ui
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Call
@@ -33,7 +33,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,14 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.userProfileChangeRequest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,49 +59,84 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Home", "History", "Contacts", "Profile")
 
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val isAuthScreen = currentRoute == "auth"
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("EpiGuard") },
-                actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+            if (!isAuthScreen) {
+                TopAppBar(
+                    title = { Text("EpiGuard") },
+                    actions = {
+                        IconButton(onClick = onLogout) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = {
-            NavigationBar {
-                tabs.forEachIndexed { index, title ->
-                    NavigationBarItem(
-                        icon = {
-                            when (index) {
-                                0 -> Icon(Icons.Default.Home, contentDescription = title)
-                                1 -> Icon(Icons.Default.List, contentDescription = title)
-                                2 -> Icon(Icons.Default.Call, contentDescription = title)
-                                3 -> Icon(Icons.Default.AccountCircle, contentDescription = title)
+            if (!isAuthScreen) {
+                NavigationBar {
+                    tabs.forEachIndexed { index, title ->
+                        NavigationBarItem(
+                            icon = {
+                                when (index) {
+                                    0 -> Icon(Icons.Default.Home, contentDescription = title)
+                                    1 -> Icon(Icons.Default.List, contentDescription = title)
+                                    2 -> Icon(Icons.Default.Call, contentDescription = title)
+                                    3 -> Icon(
+                                        Icons.Default.AccountCircle,
+                                        contentDescription = title
+                                    )
+                                }
+                            },
+                            label = { Text(title) },
+                            selected = selectedTab == index,
+                            onClick = {
+                                if (currentUser != null) {
+                                    selectedTab = index
+                                    when (index) {
+                                        0 -> navController.navigate("main") {
+                                            popUpTo("main") { inclusive = true }
+                                        }
+
+                                        1 -> navController.navigate("history") {
+                                            popUpTo("main")
+                                        }
+
+                                        2 -> navController.navigate("emergency_contacts") {
+                                            popUpTo("main")
+                                        }
+
+                                        3 -> navController.navigate("edit_profile") {
+                                            popUpTo("main")
+                                        }
+                                    }
+                                }
                             }
-                        },
-                        label = { Text(title) },
-                        selected = selectedTab == index,
-                        onClick = {
-                            selectedTab = index
-                            when (index) {
-                                0 -> navController.navigate("main")
-                                1 -> navController.navigate("history")
-                                2 -> navController.navigate("emergency_contacts")
-                                3 -> navController.navigate("edit_profile")
-                            }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
+        Box(
+            modifier = Modifier.padding(
+                top = if (isAuthScreen) 0.dp else padding.calculateTopPadding(),
+                bottom = if (isAuthScreen) 0.dp else padding.calculateBottomPadding(),
+                start = padding.calculateStartPadding(LocalLayoutDirection.current),
+                end = padding.calculateEndPadding(LocalLayoutDirection.current)
+            )
+        ) {
             content()
         }
     }
+
+    BackHandler(enabled = currentUser == null && !isAuthScreen) {
+        // Do nothing, effectively disabling back navigation
+    }
+
 }
 
 @Composable
