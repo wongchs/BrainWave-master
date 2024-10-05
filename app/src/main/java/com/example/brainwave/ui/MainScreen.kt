@@ -2,7 +2,6 @@ package com.example.brainwave.ui
 
 import android.content.Context
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +33,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -61,6 +62,7 @@ fun MainScreen(
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Home", "History", "Contacts", "Profile")
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val isAuthScreen = currentRoute == "auth"
@@ -74,6 +76,7 @@ fun MainScreen(
                             popUpTo(0) { inclusive = true }
                         }
                     }
+
                     navController.previousBackStackEntry != null -> {
                         navController.navigateUp()
                     }
@@ -98,7 +101,7 @@ fun MainScreen(
                 TopAppBar(
                     title = { Text("EpiGuard") },
                     actions = {
-                        IconButton(onClick = onLogout) {
+                        IconButton(onClick = { showLogoutDialog = true }) {
                             Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
                         }
                     }
@@ -161,6 +164,29 @@ fun MainScreen(
         ) {
             content()
         }
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Confirm Logout") },
+            text = { Text("Are you sure you want to log out?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                    }
+                ) {
+                    Text("Yes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("No")
+                }
+            }
+        )
     }
 
 }
