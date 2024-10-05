@@ -54,11 +54,9 @@ import com.google.firebase.auth.userProfileChangeRequest
 @Composable
 fun MainScreen(
     navController: NavHostController,
-    context: Context,
-    receivedData: String,
-    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
     currentUser: FirebaseUser?,
     onLogout: () -> Unit,
+    content: @Composable () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Home", "History", "Contacts", "Profile")
@@ -91,7 +89,7 @@ fun MainScreen(
                         onClick = {
                             selectedTab = index
                             when (index) {
-                                0 -> {} // Stay on home screen
+                                0 -> navController.navigate("main")
                                 1 -> navController.navigate("history")
                                 2 -> navController.navigate("emergency_contacts")
                                 3 -> navController.navigate("edit_profile")
@@ -103,8 +101,7 @@ fun MainScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            // Only show HomeScreen here, other screens are handled by NavHost
-            HomeScreen(context, receivedData, seizureData)
+            content()
         }
     }
 }
@@ -131,8 +128,6 @@ fun HomeScreen(
         )
     }
 }
-
-
 
 @Composable
 fun ActionCard(

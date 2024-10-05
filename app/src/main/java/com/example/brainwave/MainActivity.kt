@@ -28,6 +28,7 @@ import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.ui.AuthScreen
 import com.example.brainwave.ui.EditProfileScreen
 import com.example.brainwave.ui.EmergencyContactsScreen
+import com.example.brainwave.ui.HomeScreen
 import com.example.brainwave.ui.MainScreen
 import com.example.brainwave.ui.SeizureDetailScreen
 import com.example.brainwave.ui.SeizureEvent
@@ -85,148 +86,154 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
 
-            NavHost(navController = navController, startDestination = "auth") {
-                composable("auth") {
-                    if (currentUser.value != null) {
-                        LaunchedEffect(Unit) {
-                            navController.navigate("main") {
-                                popUpTo("auth") { inclusive = true }
-                            }
-                        }
-                    } else {
-                        AuthScreen(
-                            onAuthSuccess = {
+            MainScreen(
+                navController = navController,
+                currentUser = currentUser.value,
+                onLogout = {
+                    auth.signOut()
+                    currentUser.value = null
+                    navController.navigate("auth") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
+            )
+            {
+                NavHost(navController = navController, startDestination = "auth") {
+                    composable("auth") {
+                        if (currentUser.value != null) {
+                            LaunchedEffect(Unit) {
                                 navController.navigate("main") {
                                     popUpTo("auth") { inclusive = true }
                                 }
                             }
+                        } else {
+                            AuthScreen(
+                                onAuthSuccess = {
+                                    navController.navigate("main") {
+                                        popUpTo("auth") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    composable("main") {
+                        HomeScreen(
+                            context = this@MainActivity,
+                            receivedData = receivedData.value,
+                            seizureData = seizureData.value
                         )
                     }
-                }
-                composable("main") {
-                    MainScreen(
-                        navController = navController,
-                        context = this@MainActivity,
-                        receivedData = receivedData.value,
-                        seizureData = seizureData.value,
-                        currentUser = currentUser.value,  // Pass the currentUser here
-                        onLogout = {
-                            auth.signOut()
-                            currentUser.value = null
-                            navController.navigate("auth") {
-                                popUpTo("main") { inclusive = true }
+
+                    composable("history") {
+                        SeizureHistoryScreen(
+                            onBackClick = { navController.navigateUp() },
+                            onSeizureClick = { seizure ->
+                                navController.navigate("seizure_detail/${seizure.id}")
                             }
-                        }
-                    )
-                }
-
-                composable("history") {
-                    SeizureHistoryScreen(
-                        onBackClick = { navController.navigateUp() },
-                        onSeizureClick = { seizure ->
-                            navController.navigate("seizure_detail/${seizure.id}")
-                        }
-                    )
-                }
-
-                composable(
-                    "seizure_detail/{seizureId}",
-                    arguments = listOf(navArgument("seizureId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val seizureId = backStackEntry.arguments?.getString("seizureId")
-                    var seizure by remember { mutableStateOf<SeizureEvent?>(null) }
-                    var isLoading by remember { mutableStateOf(true) }
-                    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-                    LaunchedEffect(seizureId) {
-                        if (seizureId != null) {
-                            val db = Firebase.firestore
-                            db.collection("seizures").document(seizureId).get()
-                                .addOnSuccessListener { document ->
-                                    if (document != null && document.exists()) {
-                                        seizure = document.toObject(SeizureEvent::class.java)
-                                            ?.copy(id = document.id)
-                                        isLoading = false
-                                    } else {
-                                        errorMessage = "Seizure not found"
-                                        isLoading = false
-                                    }
-                                }
-                                .addOnFailureListener { e ->
-                                    errorMessage = "Error loading seizure: ${e.message}"
-                                    isLoading = false
-                                }
-                        } else {
-                            errorMessage = "Invalid seizure ID"
-                            isLoading = false
-                        }
+                        )
                     }
 
-                    when {
-                        isLoading -> {
-                            CircularProgressIndicator()
+                    composable(
+                        "seizure_detail/{seizureId}",
+                        arguments = listOf(navArgument("seizureId") { type = NavType.StringType })
+                    ) { backStackEntry ->
+                        val seizureId = backStackEntry.arguments?.getString("seizureId")
+                        var seizure by remember { mutableStateOf<SeizureEvent?>(null) }
+                        var isLoading by remember { mutableStateOf(true) }
+                        var errorMessage by remember { mutableStateOf<String?>(null) }
+
+                        LaunchedEffect(seizureId) {
+                            if (seizureId != null) {
+                                val db = Firebase.firestore
+                                db.collection("seizures").document(seizureId).get()
+                                    .addOnSuccessListener { document ->
+                                        if (document != null && document.exists()) {
+                                            seizure = document.toObject(SeizureEvent::class.java)
+                                                ?.copy(id = document.id)
+                                            isLoading = false
+                                        } else {
+                                            errorMessage = "Seizure not found"
+                                            isLoading = false
+                                        }
+                                    }
+                                    .addOnFailureListener { e ->
+                                        errorMessage = "Error loading seizure: ${e.message}"
+                                        isLoading = false
+                                    }
+                            } else {
+                                errorMessage = "Invalid seizure ID"
+                                isLoading = false
+                            }
                         }
 
-                        errorMessage != null -> {
-                            Text(errorMessage!!, color = Color.Red)
+                        when {
+                            isLoading -> {
+                                CircularProgressIndicator()
+                            }
+
+                            errorMessage != null -> {
+                                Text(errorMessage!!, color = Color.Red)
+                            }
+
+                            seizure != null -> {
+                                SeizureDetailScreen(
+                                    seizure = seizure!!,
+                                    onBackClick = { navController.navigateUp() }
+                                )
+                            }
                         }
 
-                        seizure != null -> {
-                            SeizureDetailScreen(
-                                seizure = seizure!!,
-                                onBackClick = { navController.navigateUp() }
-                            )
-                        }
                     }
 
-                }
+                    composable("emergency_contacts") {
+                        EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
+                    }
 
-                composable("emergency_contacts") {
-                    EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
-                }
+                    composable("edit_profile") {
+                        var isLoading by remember { mutableStateOf(false) }
+                        var errorMessage by remember { mutableStateOf<String?>(null) }
+                        var successMessage by remember { mutableStateOf<String?>(null) }
 
-                composable("edit_profile") {
-                    var isLoading by remember { mutableStateOf(false) }
-                    var errorMessage by remember { mutableStateOf<String?>(null) }
-                    var successMessage by remember { mutableStateOf<String?>(null) }
+                        EditProfileScreen(
+                            user = currentUser.value?.let { firebaseUser ->
+                                User(
+                                    firebaseUser.uid,
+                                    firebaseUser.email ?: "",
+                                    firebaseUser.displayName ?: ""
+                                )
+                            } ?: User(),
+                            isLoading = isLoading,
+                            errorMessage = errorMessage,
+                            successMessage = successMessage,
+                            onSaveProfile = { updatedUser ->
+                                isLoading = true
+                                errorMessage = null
+                                successMessage = null
 
-                    EditProfileScreen(
-                        user = currentUser.value?.let { firebaseUser ->
-                            User(
-                                firebaseUser.uid,
-                                firebaseUser.email ?: "",
-                                firebaseUser.displayName ?: ""
-                            )
-                        } ?: User(),
-                        isLoading = isLoading,
-                        errorMessage = errorMessage,
-                        successMessage = successMessage,
-                        onSaveProfile = { updatedUser ->
-                            isLoading = true
-                            errorMessage = null
-                            successMessage = null
-
-                            val profileUpdates = userProfileChangeRequest {
-                                displayName = updatedUser.name
-                            }
-                            currentUser.value?.updateProfile(profileUpdates)
-                                ?.addOnCompleteListener { task ->
-                                    isLoading = false
-                                    if (task.isSuccessful) {
-                                        currentUser.value = auth.currentUser
-                                        successMessage = "Profile updated successfully"
-                                    } else {
-                                        errorMessage =
-                                            task.exception?.message ?: "Failed to update profile"
-                                    }
+                                val profileUpdates = userProfileChangeRequest {
+                                    displayName = updatedUser.name
                                 }
-                        },
-                        onBackClick = { navController.navigateUp() }
-                    )
-                }
+                                currentUser.value?.updateProfile(profileUpdates)
+                                    ?.addOnCompleteListener { task ->
+                                        isLoading = false
+                                        if (task.isSuccessful) {
+                                            currentUser.value = auth.currentUser
+                                            successMessage = "Profile updated successfully"
+                                        } else {
+                                            errorMessage =
+                                                task.exception?.message
+                                                    ?: "Failed to update profile"
+                                        }
+                                    }
+                            },
+                            onBackClick = { navController.navigateUp() }
+                        )
+                    }
 
-                auth.addAuthStateListener { firebaseAuth ->
-                    currentUser.value = firebaseAuth.currentUser
+                    auth.addAuthStateListener { firebaseAuth ->
+                        currentUser.value = firebaseAuth.currentUser
+                    }
                 }
             }
         }
@@ -264,4 +271,3 @@ class MainActivity : ComponentActivity() {
     }
 
 }
-
