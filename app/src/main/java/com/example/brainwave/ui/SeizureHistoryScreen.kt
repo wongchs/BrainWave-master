@@ -237,7 +237,6 @@ fun SeizureEventItem(seizure: SeizureEvent, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SeizureDetailScreen(seizure: SeizureEvent) {
     var showMap by remember { mutableStateOf(false) }

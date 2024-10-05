@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("emergency_contacts") {
-                        EmergencyContactsScreen(onBackClick = { navController.navigateUp() })
+                        EmergencyContactsScreen()
                     }
 
                     composable("edit_profile") {
