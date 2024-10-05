@@ -1,7 +1,9 @@
 package com.example.brainwave.ui
 
 import android.content.Context
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +64,33 @@ fun MainScreen(
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val isAuthScreen = currentRoute == "auth"
+
+    val backCallback = remember {
+        object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    currentUser == null && !isAuthScreen -> {
+                        navController.navigate("auth") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
+                    navController.previousBackStackEntry != null -> {
+                        navController.navigateUp()
+                    }
+                }
+            }
+        }
+    }
+
+    backCallback.isEnabled = currentUser == null || !isAuthScreen
+
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    DisposableEffect(backDispatcher) {
+        backDispatcher?.addCallback(backCallback)
+        onDispose {
+            backCallback.remove()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -131,10 +161,6 @@ fun MainScreen(
         ) {
             content()
         }
-    }
-
-    BackHandler(enabled = currentUser == null && !isAuthScreen) {
-        // Do nothing, effectively disabling back navigation
     }
 
 }

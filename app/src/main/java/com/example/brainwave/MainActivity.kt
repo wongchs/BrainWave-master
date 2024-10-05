@@ -93,7 +93,7 @@ class MainActivity : ComponentActivity() {
                     auth.signOut()
                     currentUser.value = null
                     navController.navigate("auth") {
-                        popUpTo("main") { inclusive = true }
+                        popUpTo(0) { inclusive = true }
                     }
                 }
             )
