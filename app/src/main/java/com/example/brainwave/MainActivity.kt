@@ -127,7 +127,6 @@ class MainActivity : ComponentActivity() {
 
                     composable("history") {
                         SeizureHistoryScreen(
-                            onBackClick = { navController.navigateUp() },
                             onSeizureClick = { seizure ->
                                 navController.navigate("seizure_detail/${seizure.id}")
                             }
@@ -179,7 +178,6 @@ class MainActivity : ComponentActivity() {
                             seizure != null -> {
                                 SeizureDetailScreen(
                                     seizure = seizure!!,
-                                    onBackClick = { navController.navigateUp() }
                                 )
                             }
                         }
