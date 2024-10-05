@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
@@ -67,6 +68,15 @@ fun MainScreen(
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val isAuthScreen = currentRoute == "auth"
 
+    val currentScreenTitle = when (currentRoute) {
+        "main" -> "Home"
+        "history" -> "History"
+        "emergency_contacts" -> "Emergency Contacts"
+        "edit_profile" -> "Edit Profile"
+        "seizure_detail/{seizureId}" -> "Seizure Details"
+        else -> "EpiGuard"
+    }
+
     val backCallback = remember {
         object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -99,7 +109,14 @@ fun MainScreen(
         topBar = {
             if (!isAuthScreen) {
                 TopAppBar(
-                    title = { Text("EpiGuard") },
+                    title = { Text(currentScreenTitle) },
+                    navigationIcon = {
+                        if (navController.previousBackStackEntry != null) {
+                            IconButton(onClick = { navController.navigateUp() }) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                    },
                     actions = {
                         IconButton(onClick = { showLogoutDialog = true }) {
                             Icon(Icons.Default.ExitToApp, contentDescription = "Logout")
