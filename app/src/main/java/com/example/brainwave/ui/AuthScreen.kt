@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -36,6 +37,12 @@ fun AuthScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.Center
     ) {
+        Text(
+            text = "EpiGuard",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(bottom = 32.dp),
+            color = MaterialTheme.colorScheme.primary,
+        )
         if (isLogin) {
             LoginScreen(onLoginSuccess = { user ->
                 onAuthSuccess(user)
