@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,6 +44,8 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val receivedData = mutableStateOf("")
@@ -85,6 +88,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val navController = rememberNavController()
+
+            LaunchedEffect(Unit) {
+                if (intent?.extras?.getString("NOTIFICATION_TYPE") == "SEIZURE_DETECTED") {
+                    val seizureId = intent.extras?.getString("SEIZURE_ID")
+                    if (seizureId != null) {
+                        delay(500) // Small delay to ensure NavHost is set up
+                        navController.navigate("seizure_detail/$seizureId")
+                    }
+                }
+            }
 
             MainScreen(
                 navController = navController,
@@ -170,18 +183,13 @@ class MainActivity : ComponentActivity() {
                             isLoading -> {
                                 CircularProgressIndicator()
                             }
-
                             errorMessage != null -> {
                                 Text(errorMessage!!, color = Color.Red)
                             }
-
                             seizure != null -> {
-                                SeizureDetailScreen(
-                                    seizure = seizure!!,
-                                )
+                                SeizureDetailScreen(seizure = seizure!!)
                             }
                         }
-
                     }
 
                     composable("emergency_contacts") {

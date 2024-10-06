@@ -193,28 +193,33 @@ class BluetoothService : Service() {
         data: List<Float>,
         locationData: LocationManager.LocationData?
     ) {
-        // Show push notification
-        val notification = createSeizureNotification(timestamp, locationData)
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(2, notification)
-
         // Log data and save to Firestore
-        logSeizureData(timestamp, data, locationData)
+        logSeizureData(timestamp, data, locationData) { seizureId ->
+            // Show push notification with the seizure ID
+            val notification = createSeizureNotification(timestamp, locationData, seizureId)
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.notify(2, notification)
 
-        sendSMSNotifications(timestamp, locationData)
+            sendSMSNotifications(timestamp, locationData)
 
-        // Invoke callback
-        seizureCallback?.invoke(timestamp, data, locationData)
+            // Invoke callback
+            seizureCallback?.invoke(timestamp, data, locationData)
+        }
     }
 
     private fun createSeizureNotification(
         timestamp: String,
-        locationData: LocationManager.LocationData?
+        locationData: LocationManager.LocationData?,
+        seizureId: String
     ): Notification {
-        val notificationIntent = Intent(this, MainActivity::class.java)
+        val notificationIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra("NOTIFICATION_TYPE", "SEIZURE_DETECTED")
+            putExtra("SEIZURE_ID", seizureId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
+            this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val locationString = locationData?.let {
@@ -236,13 +241,15 @@ class BluetoothService : Service() {
             .setVibrate(vibrationPattern)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
             .build()
     }
 
     private fun logSeizureData(
         timestamp: String,
         data: List<Float>,
-        locationData: LocationManager.LocationData?
+        locationData: LocationManager.LocationData?,
+        onComplete: (String) -> Unit
     ) {
         val db = FirebaseFirestore.getInstance()
         val currentUser = FirebaseAuth.getInstance().currentUser
@@ -261,12 +268,15 @@ class BluetoothService : Service() {
                 .add(seizureData)
                 .addOnSuccessListener { documentReference ->
                     Log.d("Firestore", "DocumentSnapshot added with ID: ${documentReference.id}")
+                    onComplete(documentReference.id)
                 }
                 .addOnFailureListener { e ->
                     Log.w("Firestore", "Error adding document", e)
+                    onComplete("") // Call with empty string in case of failure
                 }
         } else {
             Log.w("Firestore", "User not authenticated, seizure data not saved")
+            onComplete("") // Call with empty string if user is not authenticated
         }
     }
 
