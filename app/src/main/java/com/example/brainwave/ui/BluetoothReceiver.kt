@@ -93,7 +93,11 @@ fun BluetoothReceiver(
                 message = "Connected"
             } catch (e: Exception) {
                 e.printStackTrace()
-                message = "Error: ${e.message}"
+                message = when {
+                    e.message?.contains("bluetooth", ignoreCase = true) == true -> "Bluetooth is not enabled. Please turn on Bluetooth to use this feature."
+                    e.message?.contains("connection", ignoreCase = true) == true -> "Unable to connect. Please make sure the device is nearby and paired."
+                    else -> "An error occurred. Please try again later."
+                }
             }
         }
     }
