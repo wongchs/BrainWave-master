@@ -219,7 +219,7 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        BluetoothReceiver(context, receivedData, seizureData)
+        BluetoothReceiver(context, receivedData)
 
         Spacer(modifier = Modifier.height(16.dp))
 

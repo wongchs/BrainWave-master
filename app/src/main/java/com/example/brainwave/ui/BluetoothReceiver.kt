@@ -1,6 +1,8 @@
 package com.example.brainwave.ui
 
 import android.content.Context
+import android.location.Location
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,16 +28,60 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.brainwave.utils.LocationManager
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import org.json.JSONObject
 
 @Composable
 fun BluetoothReceiver(
     context: Context,
     receivedData: String,
-    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
 ) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
+    var seizureData by remember { mutableStateOf<Triple<String, List<Float>, LocationManager.LocationData?>?>(null) }
+
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val db = FirebaseFirestore.getInstance()
+
+    LaunchedEffect(currentUser) {
+        currentUser?.let { user ->
+            db.collection("seizures")
+                .whereEqualTo("userId", user.uid)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { documents ->
+                    if (!documents.isEmpty) {
+                        val document = documents.documents[0]
+                        val timestamp = document.getString("timestamp") ?: ""
+                        val data = document.get("eegData") as? List<Float> ?: emptyList()
+                        val latitude = document.getDouble("latitude")
+                        val longitude = document.getDouble("longitude")
+                        val address = document.getString("address")
+
+                        val locationData = if (latitude != null && longitude != null) {
+                            LocationManager.LocationData(
+                                Location("").apply {
+                                    this.latitude = latitude
+                                    this.longitude = longitude
+                                },
+                                address ?: ""
+                            )
+                        } else null
+
+                        seizureData = Triple(timestamp, data, locationData)
+                    } else {
+                        seizureData = null
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    Log.w("BluetoothReceiver", "Error getting seizure data", exception)
+                    seizureData = null
+                }
+        }
+    }
 
     LaunchedEffect(receivedData) {
         if (receivedData.isNotEmpty()) {
