@@ -1,6 +1,11 @@
 package com.example.brainwave.ui
 
+import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.clickable
@@ -214,6 +219,8 @@ fun HomeScreen(
     receivedData: String,
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
 ) {
+    BluetoothEnablePrompt(context)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -232,38 +239,39 @@ fun HomeScreen(
 }
 
 @Composable
-fun ActionCard(
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-        }
+fun BluetoothEnablePrompt(context: Context) {
+    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    var showPrompt by remember { mutableStateOf(!bluetoothAdapter?.isEnabled!! ?: false) }
+
+    if (showPrompt) {
+        AlertDialog(
+            onDismissRequest = { showPrompt = false },
+            title = { Text("Enable Bluetooth") },
+            text = { Text("Bluetooth is required for this app to function properly. Would you like to enable it?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPrompt = false
+                        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                        try {
+                            (context as? Activity)?.startActivityForResult(enableBtIntent, 1)
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(
+                                context,
+                                "Unable to enable Bluetooth. Please enable it manually.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                ) {
+                    Text("Enable")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPrompt = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
-

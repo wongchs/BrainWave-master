@@ -1,5 +1,6 @@
 package com.example.brainwave
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -183,9 +184,11 @@ class MainActivity : ComponentActivity() {
                             isLoading -> {
                                 CircularProgressIndicator()
                             }
+
                             errorMessage != null -> {
                                 Text(errorMessage!!, color = Color.Red)
                             }
+
                             seizure != null -> {
                                 SeizureDetailScreen(seizure = seizure!!)
                             }
@@ -275,4 +278,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 1) {
+            if (resultCode == Activity.RESULT_OK) {
+                // Bluetooth is now enabled
+                Toast.makeText(this, "Bluetooth has been enabled", Toast.LENGTH_SHORT).show()
+            } else {
+                // User denied to enable Bluetooth
+                Toast.makeText(
+                    this,
+                    "Bluetooth is required for full functionality",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
 }
