@@ -1,15 +1,13 @@
 package com.example.brainwave
 
 import android.app.Activity
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import com.example.brainwave.ui.BluetoothReceiver
-import com.example.brainwave.utils.requestBluetoothPermissions
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -20,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -46,7 +43,6 @@ import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val receivedData = mutableStateOf("")
@@ -55,6 +51,7 @@ class MainActivity : ComponentActivity() {
     private val db by lazy { Firebase.firestore }
     private val auth by lazy { FirebaseAuth.getInstance() }
     private val currentUser = mutableStateOf<FirebaseUser?>(null)
+    private lateinit var locationManager: LocationManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -71,6 +68,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        locationManager = LocationManager(this)
         FirebaseApp.initializeApp(this)
         requestRequiredPermissions()
 
@@ -280,18 +278,45 @@ class MainActivity : ComponentActivity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 1) {
-            if (resultCode == Activity.RESULT_OK) {
-                // Bluetooth is now enabled
-                Toast.makeText(this, "Bluetooth has been enabled", Toast.LENGTH_SHORT).show()
-            } else {
-                // User denied to enable Bluetooth
-                Toast.makeText(
-                    this,
-                    "Bluetooth is required for full functionality",
-                    Toast.LENGTH_LONG
-                ).show()
+        when (requestCode) {
+            1 -> {
+                if (resultCode == Activity.RESULT_OK) {
+                    // Bluetooth is now enabled
+                    Toast.makeText(this, "Bluetooth has been enabled", Toast.LENGTH_SHORT).show()
+                } else {
+                    // User denied to enable Bluetooth
+                    Toast.makeText(
+                        this,
+                        "Bluetooth is required for full functionality",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
+
+            REQUEST_CHECK_SETTINGS -> {
+                when (resultCode) {
+                    Activity.RESULT_OK -> {
+                        // Location settings have been satisfied, start location updates
+                        locationManager.startLocationUpdates { locationData ->
+                            // Handle location updates
+                        }
+                    }
+
+                    Activity.RESULT_CANCELED -> {
+                        // The user was asked to change settings, but chose not to
+                        Toast.makeText(
+                            this,
+                            "Location is required for full functionality",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+            // ... (handle other request codes if needed)
         }
+    }
+
+    companion object {
+        const val REQUEST_CHECK_SETTINGS = 1001
     }
 }

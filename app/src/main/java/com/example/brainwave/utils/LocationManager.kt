@@ -1,6 +1,7 @@
 package com.example.brainwave.utils
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Address
@@ -8,6 +9,7 @@ import android.location.Geocoder
 import android.location.Location
 import android.os.Looper
 import androidx.core.app.ActivityCompat
+import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,6 +20,7 @@ class LocationManager(private val context: Context) {
     private val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
     private val geocoder: Geocoder = Geocoder(context, Locale.getDefault())
+    private val settingsClient: SettingsClient = LocationServices.getSettingsClient(context)
 
     private val locationRequest = LocationRequest.create().apply {
         interval = 10000
@@ -26,6 +29,22 @@ class LocationManager(private val context: Context) {
     }
 
     private var locationCallback: LocationCallback? = null
+
+
+    fun checkLocationSettings(activity: Activity, onSuccess: () -> Unit, onFailure: (ResolvableApiException) -> Unit) {
+        val builder = LocationSettingsRequest.Builder()
+            .addLocationRequest(locationRequest)
+
+        settingsClient.checkLocationSettings(builder.build())
+            .addOnSuccessListener {
+                onSuccess()
+            }
+            .addOnFailureListener { exception ->
+                if (exception is ResolvableApiException) {
+                    onFailure(exception)
+                }
+            }
+    }
 
     fun getLastKnownLocation(callback: (LocationData?) -> Unit) {
         if (!hasLocationPermission()) {

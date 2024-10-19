@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -42,8 +43,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brainwave.utils.LocationManager
@@ -211,7 +214,8 @@ fun HomeScreen(
     seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
 ) {
     BluetoothEnablePrompt(context)
-    LocationEnablePrompt(context)
+    val locationManager = remember { LocationManager(context) }
+    LocationEnablePrompt(locationManager)
 
     Column(
         modifier = Modifier
@@ -269,31 +273,27 @@ fun BluetoothEnablePrompt(context: Context) {
 }
 
 @Composable
-fun LocationEnablePrompt(context: Context) {
-    val locationManager =
-        context.getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
-    var showPrompt by remember { mutableStateOf(!locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) }
+fun LocationEnablePrompt(locationManager: LocationManager) {
+    val context = LocalContext.current
+    val activity = context as? Activity ?: return
 
-    if (showPrompt) {
-        AlertDialog(
-            onDismissRequest = { showPrompt = false },
-            title = { Text("Enable Location Services") },
-            text = { Text("Location services are required for this app to function properly. Would you like to enable them?") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPrompt = false
-                        context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                    }
-                ) {
-                    Text("Enable")
-                }
+    DisposableEffect(Unit) {
+        locationManager.checkLocationSettings(
+            activity,
+            onSuccess = {
+                // Location settings are satisfied, proceed with your app's location functionality
             },
-            dismissButton = {
-                TextButton(onClick = { showPrompt = false }) {
-                    Text("Cancel")
+            onFailure = { exception ->
+                try {
+                    exception.startResolutionForResult(activity, REQUEST_CHECK_SETTINGS)
+                } catch (sendEx: IntentSender.SendIntentException) {
+                    // Ignore the error.
                 }
             }
         )
+
+        onDispose { }
     }
 }
+
+const val REQUEST_CHECK_SETTINGS = 1001
