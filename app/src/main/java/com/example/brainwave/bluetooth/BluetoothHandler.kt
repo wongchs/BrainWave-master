@@ -195,7 +195,7 @@ class BluetoothService : Service() {
             this,
             { message ->
                 if (!isAppInForeground) {
-                    updateNotification(message)
+                    updateNotification(formatMessageForNotification(message))
                 }
                 dataCallback?.invoke(message)
             },
@@ -203,6 +203,26 @@ class BluetoothService : Service() {
                 handleSeizureDetection(timestamp, data, location)
             }
         )
+    }
+
+    private fun formatMessageForNotification(message: String): String {
+        return when {
+            message.contains("Device doesn't support Bluetooth") ->
+                "Bluetooth not supported on this device"
+            message.contains("Bluetooth is not enabled") ->
+                "Please enable Bluetooth to use this feature"
+            message.contains("Could not connect to server") ->
+                "Unable to connect to the EEG device. Please check if it's turned on and nearby"
+            message.contains("Server device not found") ->
+                "EEG device not found. Please make sure it's paired with your phone"
+            message.contains("Connection lost") ->
+                "Connection to EEG device lost. Attempting to reconnect..."
+            message.contains("Connected to server") ->
+                "Connected to EEG device successfully"
+            message.contains("read failed") || message.contains("socket might closed or timeout") ->
+                "Connection issue detected. Please check your EEG device"
+            else -> message
+        }
     }
 
     private fun handleSeizureDetection(
@@ -302,12 +322,16 @@ class BluetoothService : Service() {
             bluetoothClient.disconnect() // Ensure any existing connection is closed
             bluetoothClient.connectToServer()
         } else {
-            dataCallback?.invoke("Already connected")
+            val message = "Already connected to EEG device"
+            dataCallback?.invoke(message)
+            if (!isAppInForeground) {
+                updateNotification(message)
+            }
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("Bluetooth Service Running")
+        val notification = createNotification("EEG Monitoring Service Running")
         startForeground(NOTIFICATION_ID, notification)
 
         bluetoothClient.connectToServer()
@@ -359,7 +383,7 @@ class BluetoothService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID_EEG)
-            .setContentTitle("Bluetooth Data")
+            .setContentTitle("EEG Monitor")
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
@@ -377,7 +401,7 @@ class BluetoothService : Service() {
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }
-
+    
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun sendSMSNotifications(
