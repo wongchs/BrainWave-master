@@ -29,6 +29,7 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider.NewInstanceFactory.Companion.instance
 import com.example.brainwave.ui.EmergencyContact
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseAuth
@@ -45,6 +46,7 @@ class BluetoothClient(
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val locationManager = LocationManager(context)
     private var lastKnownLocationData: LocationManager.LocationData? = null
+    private var isConnected = false
 
     init {
         locationManager.startLocationUpdates { locationData ->
@@ -69,15 +71,31 @@ class BluetoothClient(
 
         serverDevice?.let { device ->
             try {
+                socket?.close() // Close any existing connection
                 socket = device.createRfcommSocketToServiceRecord(uuid)
                 socket?.connect()
+                isConnected = true
                 onMessageReceived("Connected to server")
                 listenForData()
             } catch (e: IOException) {
                 Log.e("BluetoothClient", "Could not connect to server", e)
                 onMessageReceived("Failed to connect: ${e.message}")
+                isConnected = false
             }
         } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+    }
+
+    fun disconnect() {
+        try {
+            socket?.close()
+            isConnected = false
+        } catch (e: IOException) {
+            Log.e("BluetoothClient", "Error closing socket", e)
+        }
+    }
+
+    fun isConnected(): Boolean {
+        return isConnected
     }
 
     private fun reconnectToServer() {
@@ -147,15 +165,6 @@ class BluetoothClient(
             return false
         }
     }
-
-
-    fun disconnect() {
-        try {
-            socket?.close()
-        } catch (e: IOException) {
-            Log.e("BluetoothClient", "Error closing socket", e)
-        }
-    }
 }
 
 class BluetoothService : Service() {
@@ -168,10 +177,18 @@ class BluetoothService : Service() {
         var dataCallback: ((String) -> Unit)? = null
         var seizureCallback: ((String, List<Float>, LocationManager.LocationData?) -> Unit)? = null
         var isAppInForeground = false
+        private lateinit var instance: BluetoothService
+
+        fun refreshConnection() {
+            if (::instance.isInitialized) {
+                instance.reconnectToServer()
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createSeizureAlertChannel()
         createEEGDataChannel()
         bluetoothClient = BluetoothClient(
@@ -277,6 +294,15 @@ class BluetoothService : Service() {
         } else {
             Log.w("Firestore", "User not authenticated, seizure data not saved")
             onComplete("") // Call with empty string if user is not authenticated
+        }
+    }
+
+    private fun reconnectToServer() {
+        if (!bluetoothClient.isConnected()) {
+            bluetoothClient.disconnect() // Ensure any existing connection is closed
+            bluetoothClient.connectToServer()
+        } else {
+            dataCallback?.invoke("Already connected")
         }
     }
 

@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseUser
 
@@ -222,7 +223,13 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        BluetoothReceiver(context, receivedData)
+        BluetoothReceiver(
+            context = context,
+            receivedData = receivedData,
+            onRefreshConnection = {
+                BluetoothService.refreshConnection()
+            }
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
