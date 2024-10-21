@@ -3,6 +3,7 @@ package com.example.brainwave.ui
 import android.content.Context
 import android.location.Location
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -133,7 +134,10 @@ fun BluetoothReceiver(
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
-                    onClick = onRefreshConnection,
+                    onClick = {
+                        onRefreshConnection()
+                        Toast.makeText(context, "Refreshing connection...", Toast.LENGTH_SHORT).show()
+                    },
                     modifier = Modifier.size(48.dp)
                 ) {
                     Icon(

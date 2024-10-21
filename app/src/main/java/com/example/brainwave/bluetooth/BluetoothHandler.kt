@@ -401,7 +401,7 @@ class BluetoothService : Service() {
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
     }
-    
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun sendSMSNotifications(
