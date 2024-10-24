@@ -4,7 +4,6 @@ import android.content.Context
 import android.location.Location
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +16,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -47,48 +45,6 @@ fun BluetoothReceiver(
 ) {
     var message by remember { mutableStateOf("Waiting for connection...") }
     var dataPoints by remember { mutableStateOf(List(100) { 0f }) }
-    var seizureData by remember { mutableStateOf<Triple<String, List<Float>, LocationManager.LocationData?>?>(null) }
-
-    val currentUser = FirebaseAuth.getInstance().currentUser
-    val db = FirebaseFirestore.getInstance()
-
-    LaunchedEffect(currentUser) {
-        currentUser?.let { user ->
-            db.collection("seizures")
-                .whereEqualTo("userId", user.uid)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .addOnSuccessListener { documents ->
-                    if (!documents.isEmpty) {
-                        val document = documents.documents[0]
-                        val timestamp = document.getString("timestamp") ?: ""
-                        val data = document.get("eegData") as? List<Float> ?: emptyList()
-                        val latitude = document.getDouble("latitude")
-                        val longitude = document.getDouble("longitude")
-                        val address = document.getString("address")
-
-                        val locationData = if (latitude != null && longitude != null) {
-                            LocationManager.LocationData(
-                                Location("").apply {
-                                    this.latitude = latitude
-                                    this.longitude = longitude
-                                },
-                                address ?: ""
-                            )
-                        } else null
-
-                        seizureData = Triple(timestamp, data, locationData)
-                    } else {
-                        seizureData = null
-                    }
-                }
-                .addOnFailureListener { exception ->
-                    Log.w("BluetoothReceiver", "Error getting seizure data", exception)
-                    seizureData = null
-                }
-        }
-    }
 
     LaunchedEffect(receivedData) {
         if (receivedData.isNotEmpty()) {
@@ -101,8 +57,16 @@ fun BluetoothReceiver(
             } catch (e: Exception) {
                 e.printStackTrace()
                 message = when {
-                    e.message?.contains("bluetooth", ignoreCase = true) == true -> "Bluetooth is not enabled. Please turn on Bluetooth to use this feature."
-                    e.message?.contains("connection", ignoreCase = true) == true -> "Unable to connect. Please make sure the device is nearby and paired."
+                    e.message?.contains(
+                        "bluetooth",
+                        ignoreCase = true
+                    ) == true -> "Bluetooth is not enabled. Please turn on Bluetooth to use this feature."
+
+                    e.message?.contains(
+                        "connection",
+                        ignoreCase = true
+                    ) == true -> "Unable to connect. Please make sure the device is nearby and paired."
+
                     else -> "An error occurred. Please try again later."
                 }
             }
@@ -136,7 +100,8 @@ fun BluetoothReceiver(
                 IconButton(
                     onClick = {
                         onRefreshConnection()
-                        Toast.makeText(context, "Refreshing connection...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Refreshing connection...", Toast.LENGTH_SHORT)
+                            .show()
                     },
                     modifier = Modifier.size(48.dp)
                 ) {
@@ -153,11 +118,6 @@ fun BluetoothReceiver(
                 style = MaterialTheme.typography.titleMedium
             )
             EEGGraph(dataPoints)
-
-            seizureData?.let { (timestamp, data, locationData) ->
-                Spacer(modifier = Modifier.height(16.dp))
-                SeizureDetectionCard(timestamp, data, locationData)
-            }
         }
     }
 }

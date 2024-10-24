@@ -81,8 +81,11 @@ class MainActivity : ComponentActivity() {
         BluetoothService.dataCallback = { data ->
             receivedData.value = data
         }
+
         BluetoothService.seizureCallback = { timestamp, data, location ->
-            seizureData.value = Triple(timestamp, data, location)
+            if (BluetoothService.isAppInForeground) {
+                seizureData.value = Triple(timestamp, data, location)
+            }
         }
 
         setContent {
@@ -133,7 +136,10 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             context = this@MainActivity,
                             receivedData = receivedData.value,
-                            seizureData = seizureData.value
+                            seizureData = seizureData.value,
+                            onDismissSeizure = {
+                                seizureData.value = null
+                            }
                         )
                     }
 

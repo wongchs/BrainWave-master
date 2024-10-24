@@ -6,10 +6,11 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
-import android.provider.Settings
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -46,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brainwave.bluetooth.BluetoothService
@@ -208,15 +208,24 @@ fun MainScreen(
 
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     context: Context,
     receivedData: String,
-    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
+    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
+    onDismissSeizure: () -> Unit
 ) {
     BluetoothEnablePrompt(context)
     val locationManager = remember { LocationManager(context) }
     LocationEnablePrompt(locationManager)
+
+    seizureData?.let { data ->
+        SeizureAlertOverlay(
+            seizureData = data,
+            onDismiss = onDismissSeizure
+        )
+    }
 
     Column(
         modifier = Modifier
