@@ -5,7 +5,15 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -26,7 +33,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 @Composable
 fun EEGGraph(
@@ -57,10 +63,44 @@ fun EEGGraph(
             .background(backgroundColor)
             .padding(16.dp)
     ) {
+        // Y-axis title
+        Text(
+            text = "µV",
+            style = MaterialTheme.typography.labelMedium,
+            color = labelColor,
+            modifier = Modifier
+                .rotate(-90f)
+                .align(Alignment.CenterStart)
+                .offset(x = 8.dp)  // Adjusted to move label right
+        )
+
+        // Y-axis labels with adjusted spacing
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 32.dp, end = 2.dp),  // Increased start padding
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            for (i in 5 downTo 0) {
+                val value = minValue + (i * (maxValue - minValue) / 5)
+                Text(
+                    text = String.format("%.1f", value),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = labelColor,
+                    modifier = Modifier.padding(bottom = if (i == 0) 0.dp else 32.dp)
+                )
+            }
+        }
+
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 48.dp, end = 16.dp, top = 16.dp, bottom = 32.dp)
+                .padding(
+                    start = 80.dp,  // Increased to accommodate Y-axis labels
+                    end = 16.dp,
+                    top = 16.dp,
+                    bottom = 48.dp
+                )
         ) {
             val width = size.width
             val height = size.height
@@ -97,13 +137,13 @@ fun EEGGraph(
                 )
             }
 
-            // Draw the EEG line with gradient and smooth curve
+            // Draw the EEG line
             val path = Path()
             val points = mutableListOf<Offset>()
 
             dataPoints.forEachIndexed { index, value ->
                 val x = index * pointWidth
-                val y = height - ((value - minValue) / valueRange * height)
+                val y = height * (1f - (value - minValue) / valueRange) // Adjusted calculation
                 points.add(Offset(x, y))
             }
 
@@ -127,18 +167,10 @@ fun EEGGraph(
                 )
             }
 
-            // Create gradient for the line
-            val gradient = Brush.verticalGradient(
-                colors = listOf(
-                    lineColor.copy(alpha = 0.8f),
-                    lineColor.copy(alpha = 0.5f)
-                )
-            )
-
             // Draw the EEG line with animation
             drawPath(
                 path = path,
-                brush = gradient,
+                color = lineColor,
                 style = Stroke(
                     width = 2.dp.toPx(),
                     cap = StrokeCap.Round,
@@ -146,43 +178,13 @@ fun EEGGraph(
                 ),
                 alpha = animatedPoints.value
             )
-
-            // Add glow effect
-            drawPath(
-                path = path,
-                color = lineColor.copy(alpha = 0.2f),
-                style = Stroke(
-                    width = 8.dp.toPx(),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
-                ),
-                alpha = animatedPoints.value * 0.5f
-            )
-        }
-
-        // Y-axis labels with custom styling
-        Column(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(end = 8.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            for (i in 5 downTo 0) {
-                val value = minValue + (i * (maxValue - minValue) / 5)
-                Text(
-                    text = String.format("%.1f", value),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = labelColor,
-                    modifier = Modifier.padding(bottom = if (i == 0) 0.dp else 32.dp)
-                )
-            }
         }
 
         // X-axis labels
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(start = 48.dp, top = 8.dp),
+                .padding(start = 48.dp, end = 16.dp, bottom = 24.dp),  // Added bottom padding
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val secondsLabels = List(7) { it * (dataPoints.size / 60) }
@@ -197,25 +199,14 @@ fun EEGGraph(
             }
         }
 
-        // Add Y-axis title
-        Text(
-            text = "µV",
-            style = MaterialTheme.typography.labelMedium,
-            color = labelColor,
-            modifier = Modifier
-                .rotate(-90f)
-                .align(Alignment.CenterStart)
-                .offset(x = (-32).dp)
-        )
-
-        // Add X-axis title
+        // X-axis title with adjusted positioning
         Text(
             text = "Time (seconds)",
             style = MaterialTheme.typography.labelMedium,
             color = labelColor,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(top = 24.dp)
+                .padding(bottom = 4.dp)  // Reduced padding to prevent overlap
         )
     }
 }
