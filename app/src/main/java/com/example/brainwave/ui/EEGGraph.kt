@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -78,7 +79,7 @@ fun EEGGraph(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
-                .padding(start = 32.dp, end = 2.dp),  // Increased start padding
+                .padding(start = 24.dp, end = 2.dp),  // Increased start padding
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             for (i in 5 downTo 0) {
@@ -167,16 +168,34 @@ fun EEGGraph(
                 )
             }
 
+            val gradient = Brush.verticalGradient(
+                colors = listOf(
+                    lineColor.copy(alpha = 0.8f),
+                    lineColor.copy(alpha = 0.5f)
+                )
+            )
+
             // Draw the EEG line with animation
             drawPath(
                 path = path,
-                color = lineColor,
+                brush = gradient,
                 style = Stroke(
                     width = 2.dp.toPx(),
                     cap = StrokeCap.Round,
                     join = StrokeJoin.Round
                 ),
                 alpha = animatedPoints.value
+            )
+
+            drawPath(
+                path = path,
+                color = lineColor.copy(alpha = 0.2f),
+                style = Stroke(
+                    width = 8.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    join = StrokeJoin.Round
+                ),
+                alpha = animatedPoints.value * 0.5f
             )
         }
 
