@@ -287,10 +287,8 @@ class MainActivity : ComponentActivity() {
         when (requestCode) {
             1 -> {
                 if (resultCode == Activity.RESULT_OK) {
-                    // Bluetooth is now enabled
                     Toast.makeText(this, "Bluetooth has been enabled", Toast.LENGTH_SHORT).show()
                 } else {
-                    // User denied to enable Bluetooth
                     Toast.makeText(
                         this,
                         "Bluetooth is required for full functionality",
@@ -302,14 +300,12 @@ class MainActivity : ComponentActivity() {
             REQUEST_CHECK_SETTINGS -> {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        // Location settings have been satisfied, start location updates
                         locationManager.startLocationUpdates { locationData ->
                             // Handle location updates
                         }
                     }
 
                     Activity.RESULT_CANCELED -> {
-                        // The user was asked to change settings, but chose not to
                         Toast.makeText(
                             this,
                             "Location is required for full functionality",
@@ -318,7 +314,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            // ... (handle other request codes if needed)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) {
+            stopService(Intent(this, BluetoothService::class.java))
         }
     }
 

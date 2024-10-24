@@ -47,6 +47,8 @@ class BluetoothClient(
     private val locationManager = LocationManager(context)
     private var lastKnownLocationData: LocationManager.LocationData? = null
     private var isConnected = false
+    private var shouldReconnect = true
+    private var reconnectThread: Thread? = null
 
     init {
         locationManager.startLocationUpdates { locationData ->
@@ -66,26 +68,52 @@ class BluetoothClient(
         }
 
         val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
-        val serverDevice =
-            pairedDevices?.find { it.name == "NBLK-WAX9X" } // Replace with your laptop's Bluetooth name
+        val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
 
         serverDevice?.let { device ->
             try {
-                socket?.close() // Close any existing connection
+                socket?.close()
                 socket = device.createRfcommSocketToServiceRecord(uuid)
                 socket?.connect()
                 isConnected = true
+                shouldReconnect = true
                 onMessageReceived("Connected to server")
                 listenForData()
             } catch (e: IOException) {
                 Log.e("BluetoothClient", "Could not connect to server", e)
                 onMessageReceived("Failed to connect: ${e.message}")
                 isConnected = false
+                startReconnectionThread()
             }
         } ?: onMessageReceived("Server device not found. Make sure it's paired.")
     }
 
+    private fun startReconnectionThread() {
+        stopReconnectionThread()
+        reconnectThread = Thread {
+            while (shouldReconnect && !isConnected) {
+                try {
+                    Thread.sleep(5000)
+                    if (shouldReconnect && !isConnected) {
+                        connectToServer()
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                } catch (e: Exception) {
+                    Log.e("BluetoothClient", "Reconnection attempt failed", e)
+                }
+            }
+        }.apply { start() }
+    }
+
+    private fun stopReconnectionThread() {
+        reconnectThread?.interrupt()
+        reconnectThread = null
+    }
+
     fun disconnect() {
+        shouldReconnect = false
+        stopReconnectionThread()
         try {
             socket?.close()
             isConnected = false
@@ -117,7 +145,7 @@ class BluetoothClient(
     private fun listenForData() {
         Thread {
             val buffer = ByteArray(1024)
-            while (true) {
+            while (shouldReconnect) {
                 try {
                     val bytes = socket?.inputStream?.read(buffer)
                     bytes?.let {
@@ -142,19 +170,14 @@ class BluetoothClient(
                 } catch (e: IOException) {
                     Log.e("BluetoothClient", "Error reading data", e)
                     onMessageReceived("Connection lost: ${e.message}")
-                    reconnectToServer()
+                    isConnected = false
+                    if (shouldReconnect) {
+                        startReconnectionThread()
+                    }
                     break
                 }
             }
         }.start()
-    }
-
-    private fun getLocationString(): String {
-        return lastKnownLocationData?.let { locationData ->
-            "Latitude: ${locationData.location.latitude}, " +
-                    "Longitude: ${locationData.location.longitude}, " +
-                    "Address: ${locationData.address}"
-        } ?: "Location unavailable"
     }
 
     private fun isValidJson(json: String): Boolean {
@@ -184,6 +207,18 @@ class BluetoothService : Service() {
                 instance.reconnectToServer()
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bluetoothClient.disconnect()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        val restartServiceIntent = Intent(applicationContext, this.javaClass)
+        restartServiceIntent.setPackage(packageName)
+        startService(restartServiceIntent)
     }
 
     override fun onCreate() {
