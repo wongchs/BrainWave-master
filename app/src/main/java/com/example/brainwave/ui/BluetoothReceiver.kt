@@ -31,35 +31,73 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
 import org.json.JSONObject
 
 data class EEGDataPoints(
     val points: List<Float> = List(100) { 0f },
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val userId: String? = null  // Added userId field
 )
 
-// Create a repository to handle data persistence
-class EEGDataRepository(context: Context) {
+class EEGDataRepository(
+    private val context: Context,
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+) {
     private val sharedPreferences = context.getSharedPreferences("eeg_data", Context.MODE_PRIVATE)
     private val gson = Gson()
 
+    private fun getCurrentUserId(): String? = auth.currentUser?.uid
+
     fun saveDataPoints(dataPoints: List<Float>) {
-        val eegData = EEGDataPoints(dataPoints)
-        sharedPreferences.edit().putString("eeg_points", gson.toJson(eegData)).apply()
+        val userId = getCurrentUserId() ?: return
+        val storageKey = "eeg_points_$userId"
+
+        val eegData = EEGDataPoints(
+            points = dataPoints,
+            timestamp = System.currentTimeMillis(),
+            userId = userId
+        )
+
+        sharedPreferences.edit()
+            .putString(storageKey, gson.toJson(eegData))
+            .apply()
     }
 
     fun getDataPoints(): List<Float> {
-        val json = sharedPreferences.getString("eeg_points", null)
+        val userId = getCurrentUserId()
+        if (userId == null) {
+            return List(100) { 0f }
+        }
+
+        val storageKey = "eeg_points_$userId"
+        val json = sharedPreferences.getString(storageKey, null)
+
         return if (json != null) {
             try {
-                gson.fromJson(json, EEGDataPoints::class.java).points
+                val eegData = gson.fromJson(json, EEGDataPoints::class.java)
+                if (eegData.userId == userId) {
+                    eegData.points
+                } else {
+                    List(100) { 0f }
+                }
             } catch (e: Exception) {
                 List(100) { 0f }
             }
         } else {
             List(100) { 0f }
         }
+    }
+
+    fun clearUserData() {
+        val userId = getCurrentUserId() ?: return
+        val storageKey = "eeg_points_$userId"
+        sharedPreferences.edit().remove(storageKey).apply()
+    }
+
+    fun clearAllUserData() {
+        sharedPreferences.edit().clear().apply()
     }
 }
 

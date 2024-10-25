@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.ui.AuthScreen
+import com.example.brainwave.ui.EEGDataRepository
 import com.example.brainwave.ui.EditProfileScreen
 import com.example.brainwave.ui.EmergencyContactsScreen
 import com.example.brainwave.ui.HomeScreen
@@ -105,6 +106,8 @@ class MainActivity : ComponentActivity() {
                 navController = navController,
                 currentUser = currentUser.value,
                 onLogout = {
+                    val repository = EEGDataRepository(this)
+                    repository.clearUserData()
                     auth.signOut()
                     currentUser.value = null
                     navController.navigate("auth") {
