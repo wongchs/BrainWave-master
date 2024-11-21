@@ -1,21 +1,24 @@
 package com.example.brainwave.ui
 
+import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.content.IntentSender
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ArrowBack
@@ -24,8 +27,6 @@ import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,14 +43,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseUser
 
@@ -208,62 +208,100 @@ fun MainScreen(
 
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     context: Context,
     receivedData: String,
-    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?
+    seizureData: Triple<String, List<Float>, LocationManager.LocationData?>?,
+    onDismissSeizure: () -> Unit
 ) {
+    BluetoothEnablePrompt(context)
+    val locationManager = remember { LocationManager(context) }
+    LocationEnablePrompt(locationManager)
+
+    seizureData?.let { data ->
+        SeizureAlertOverlay(
+            seizureData = data,
+            onDismiss = onDismissSeizure
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        BluetoothReceiver(context, receivedData, seizureData)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            "Quick Actions",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
+        BluetoothReceiver(
+            context = context,
+            receivedData = receivedData,
+            onRefreshConnection = {
+                BluetoothService.refreshConnection()
+            }
         )
     }
 }
 
 @Composable
-fun ActionCard(
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-        }
+fun BluetoothEnablePrompt(context: Context) {
+    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    var showPrompt by remember { mutableStateOf(!bluetoothAdapter?.isEnabled!! ?: false) }
+
+    if (showPrompt) {
+        AlertDialog(
+            onDismissRequest = { showPrompt = false },
+            title = { Text("Enable Bluetooth") },
+            text = { Text("Bluetooth is required for this app to function properly. Would you like to enable it?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showPrompt = false
+                        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                        try {
+                            (context as? Activity)?.startActivityForResult(enableBtIntent, 1)
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(
+                                context,
+                                "Unable to enable Bluetooth. Please enable it manually.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                ) {
+                    Text("Enable")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPrompt = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
+@Composable
+fun LocationEnablePrompt(locationManager: LocationManager) {
+    val context = LocalContext.current
+    val activity = context as? Activity ?: return
+
+    DisposableEffect(Unit) {
+        locationManager.checkLocationSettings(
+            activity,
+            onSuccess = {
+                // Location settings are satisfied, proceed with your app's location functionality
+            },
+            onFailure = { exception ->
+                try {
+                    exception.startResolutionForResult(activity, REQUEST_CHECK_SETTINGS)
+                } catch (sendEx: IntentSender.SendIntentException) {
+                    // Ignore the error.
+                }
+            }
+        )
+
+        onDispose { }
+    }
+}
+
+const val REQUEST_CHECK_SETTINGS = 1001

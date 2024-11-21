@@ -1,14 +1,13 @@
 package com.example.brainwave
 
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import com.example.brainwave.ui.BluetoothReceiver
-import com.example.brainwave.utils.requestBluetoothPermissions
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -19,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -27,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.brainwave.bluetooth.BluetoothService
 import com.example.brainwave.ui.AuthScreen
+import com.example.brainwave.ui.EEGDataRepository
 import com.example.brainwave.ui.EditProfileScreen
 import com.example.brainwave.ui.EmergencyContactsScreen
 import com.example.brainwave.ui.HomeScreen
@@ -45,7 +44,6 @@ import com.google.firebase.auth.userProfileChangeRequest
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val receivedData = mutableStateOf("")
@@ -54,6 +52,7 @@ class MainActivity : ComponentActivity() {
     private val db by lazy { Firebase.firestore }
     private val auth by lazy { FirebaseAuth.getInstance() }
     private val currentUser = mutableStateOf<FirebaseUser?>(null)
+    private lateinit var locationManager: LocationManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -70,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        locationManager = LocationManager(this)
         FirebaseApp.initializeApp(this)
         requestRequiredPermissions()
 
@@ -82,8 +82,11 @@ class MainActivity : ComponentActivity() {
         BluetoothService.dataCallback = { data ->
             receivedData.value = data
         }
+
         BluetoothService.seizureCallback = { timestamp, data, location ->
-            seizureData.value = Triple(timestamp, data, location)
+            if (BluetoothService.isAppInForeground) {
+                seizureData.value = Triple(timestamp, data, location)
+            }
         }
 
         setContent {
@@ -103,6 +106,8 @@ class MainActivity : ComponentActivity() {
                 navController = navController,
                 currentUser = currentUser.value,
                 onLogout = {
+                    val repository = EEGDataRepository(this)
+                    repository.clearUserData()
                     auth.signOut()
                     currentUser.value = null
                     navController.navigate("auth") {
@@ -134,7 +139,10 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             context = this@MainActivity,
                             receivedData = receivedData.value,
-                            seizureData = seizureData.value
+                            seizureData = seizureData.value,
+                            onDismissSeizure = {
+                                seizureData.value = null
+                            }
                         )
                     }
 
@@ -183,9 +191,11 @@ class MainActivity : ComponentActivity() {
                             isLoading -> {
                                 CircularProgressIndicator()
                             }
+
                             errorMessage != null -> {
                                 Text(errorMessage!!, color = Color.Red)
                             }
+
                             seizure != null -> {
                                 SeizureDetailScreen(seizure = seizure!!)
                             }
@@ -275,4 +285,49 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            1 -> {
+                if (resultCode == Activity.RESULT_OK) {
+                    Toast.makeText(this, "Bluetooth has been enabled", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(
+                        this,
+                        "Bluetooth is required for full functionality",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+            REQUEST_CHECK_SETTINGS -> {
+                when (resultCode) {
+                    Activity.RESULT_OK -> {
+                        locationManager.startLocationUpdates { locationData ->
+                            // Handle location updates
+                        }
+                    }
+
+                    Activity.RESULT_CANCELED -> {
+                        Toast.makeText(
+                            this,
+                            "Location is required for full functionality",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (isFinishing) {
+            stopService(Intent(this, BluetoothService::class.java))
+        }
+    }
+
+    companion object {
+        const val REQUEST_CHECK_SETTINGS = 1001
+    }
 }

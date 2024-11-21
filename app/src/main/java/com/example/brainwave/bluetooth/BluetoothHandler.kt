@@ -29,6 +29,7 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider.NewInstanceFactory.Companion.instance
 import com.example.brainwave.ui.EmergencyContact
 import com.example.brainwave.utils.LocationManager
 import com.google.firebase.auth.FirebaseAuth
@@ -45,6 +46,9 @@ class BluetoothClient(
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val locationManager = LocationManager(context)
     private var lastKnownLocationData: LocationManager.LocationData? = null
+    private var isConnected = false
+    private var shouldReconnect = true
+    private var reconnectThread: Thread? = null
 
     init {
         locationManager.startLocationUpdates { locationData ->
@@ -64,20 +68,63 @@ class BluetoothClient(
         }
 
         val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
-        val serverDevice =
-            pairedDevices?.find { it.name == "NBLK-WAX9X" } // Replace with your laptop's Bluetooth name
+        val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
+//        val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
 
         serverDevice?.let { device ->
             try {
+                socket?.close()
                 socket = device.createRfcommSocketToServiceRecord(uuid)
                 socket?.connect()
+                isConnected = true
+                shouldReconnect = true
                 onMessageReceived("Connected to server")
                 listenForData()
             } catch (e: IOException) {
                 Log.e("BluetoothClient", "Could not connect to server", e)
                 onMessageReceived("Failed to connect: ${e.message}")
+                isConnected = false
+                startReconnectionThread()
             }
         } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+    }
+
+    private fun startReconnectionThread() {
+        stopReconnectionThread()
+        reconnectThread = Thread {
+            while (shouldReconnect && !isConnected) {
+                try {
+                    Thread.sleep(5000)
+                    if (shouldReconnect && !isConnected) {
+                        connectToServer()
+                    }
+                } catch (e: InterruptedException) {
+                    break
+                } catch (e: Exception) {
+                    Log.e("BluetoothClient", "Reconnection attempt failed", e)
+                }
+            }
+        }.apply { start() }
+    }
+
+    private fun stopReconnectionThread() {
+        reconnectThread?.interrupt()
+        reconnectThread = null
+    }
+
+    fun disconnect() {
+        shouldReconnect = false
+        stopReconnectionThread()
+        try {
+            socket?.close()
+            isConnected = false
+        } catch (e: IOException) {
+            Log.e("BluetoothClient", "Error closing socket", e)
+        }
+    }
+
+    fun isConnected(): Boolean {
+        return isConnected
     }
 
     private fun reconnectToServer() {
@@ -99,7 +146,7 @@ class BluetoothClient(
     private fun listenForData() {
         Thread {
             val buffer = ByteArray(1024)
-            while (true) {
+            while (shouldReconnect) {
                 try {
                     val bytes = socket?.inputStream?.read(buffer)
                     bytes?.let {
@@ -124,19 +171,14 @@ class BluetoothClient(
                 } catch (e: IOException) {
                     Log.e("BluetoothClient", "Error reading data", e)
                     onMessageReceived("Connection lost: ${e.message}")
-                    reconnectToServer()
+                    isConnected = false
+                    if (shouldReconnect) {
+                        startReconnectionThread()
+                    }
                     break
                 }
             }
         }.start()
-    }
-
-    private fun getLocationString(): String {
-        return lastKnownLocationData?.let { locationData ->
-            "Latitude: ${locationData.location.latitude}, " +
-                    "Longitude: ${locationData.location.longitude}, " +
-                    "Address: ${locationData.address}"
-        } ?: "Location unavailable"
     }
 
     private fun isValidJson(json: String): Boolean {
@@ -145,15 +187,6 @@ class BluetoothClient(
             return true
         } catch (e: Exception) {
             return false
-        }
-    }
-
-
-    fun disconnect() {
-        try {
-            socket?.close()
-        } catch (e: IOException) {
-            Log.e("BluetoothClient", "Error closing socket", e)
         }
     }
 }
@@ -168,17 +201,37 @@ class BluetoothService : Service() {
         var dataCallback: ((String) -> Unit)? = null
         var seizureCallback: ((String, List<Float>, LocationManager.LocationData?) -> Unit)? = null
         var isAppInForeground = false
+        private lateinit var instance: BluetoothService
+
+        fun refreshConnection() {
+            if (::instance.isInitialized) {
+                instance.reconnectToServer()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        bluetoothClient.disconnect()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        val restartServiceIntent = Intent(applicationContext, this.javaClass)
+        restartServiceIntent.setPackage(packageName)
+        startService(restartServiceIntent)
     }
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createSeizureAlertChannel()
         createEEGDataChannel()
         bluetoothClient = BluetoothClient(
             this,
             { message ->
                 if (!isAppInForeground) {
-                    updateNotification(message)
+                    updateNotification(formatMessageForNotification(message))
                 }
                 dataCallback?.invoke(message)
             },
@@ -186,6 +239,26 @@ class BluetoothService : Service() {
                 handleSeizureDetection(timestamp, data, location)
             }
         )
+    }
+
+    private fun formatMessageForNotification(message: String): String {
+        return when {
+            message.contains("Device doesn't support Bluetooth") ->
+                "Bluetooth not supported on this device"
+            message.contains("Bluetooth is not enabled") ->
+                "Please enable Bluetooth to use this feature"
+            message.contains("Could not connect to server") ->
+                "Unable to connect to the EEG device. Please check if it's turned on and nearby"
+            message.contains("Server device not found") ->
+                "EEG device not found. Please make sure it's paired with your phone"
+            message.contains("Connection lost") ->
+                "Connection to EEG device lost. Attempting to reconnect..."
+            message.contains("Connected to server") ->
+                "Connected to EEG device successfully"
+            message.contains("read failed") || message.contains("socket might closed or timeout") ->
+                "Connection issue detected. Please check your EEG device"
+            else -> message
+        }
     }
 
     private fun handleSeizureDetection(
@@ -280,8 +353,21 @@ class BluetoothService : Service() {
         }
     }
 
+    private fun reconnectToServer() {
+        if (!bluetoothClient.isConnected()) {
+            bluetoothClient.disconnect() // Ensure any existing connection is closed
+            bluetoothClient.connectToServer()
+        } else {
+            val message = "Already connected to EEG device"
+            dataCallback?.invoke(message)
+            if (!isAppInForeground) {
+                updateNotification(message)
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification("Bluetooth Service Running")
+        val notification = createNotification("EEG Monitoring Service Running")
         startForeground(NOTIFICATION_ID, notification)
 
         bluetoothClient.connectToServer()
@@ -333,7 +419,7 @@ class BluetoothService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID_EEG)
-            .setContentTitle("Bluetooth Data")
+            .setContentTitle("EEG Monitor")
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
