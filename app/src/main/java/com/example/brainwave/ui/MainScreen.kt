@@ -239,14 +239,6 @@ fun HomeScreen(
                 BluetoothService.refreshConnection()
             }
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            "Quick Actions",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
     }
 }
 
