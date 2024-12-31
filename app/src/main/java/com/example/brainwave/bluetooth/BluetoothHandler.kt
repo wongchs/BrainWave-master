@@ -36,12 +36,25 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import org.json.JSONObject
 
+private val BLUETOOTH_PERMISSIONS = arrayOf(
+    Manifest.permission.BLUETOOTH,
+    Manifest.permission.BLUETOOTH_ADMIN,
+    Manifest.permission.BLUETOOTH_CONNECT,
+    Manifest.permission.BLUETOOTH_SCAN
+)
+
+private val SMS_PERMISSIONS = arrayOf(
+    Manifest.permission.SEND_SMS
+)
+
 class BluetoothClient(
     private val context: Context,
     private val onMessageReceived: (String) -> Unit,
     private val onSeizureDetected: (String, List<Float>, LocationManager.LocationData?) -> Unit
 ) {
-    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private val bluetoothAdapter: BluetoothAdapter? by lazy {
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?)?.adapter
+    }
     private var socket: BluetoothSocket? = null
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     private val locationManager = LocationManager(context)
@@ -50,6 +63,12 @@ class BluetoothClient(
     private var shouldReconnect = true
     private var reconnectThread: Thread? = null
 
+    private fun checkBluetoothPermissions(): Boolean {
+        return BLUETOOTH_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
     init {
         locationManager.startLocationUpdates { locationData ->
             lastKnownLocationData = locationData
@@ -57,36 +76,46 @@ class BluetoothClient(
     }
 
     fun connectToServer() {
+        if (!checkBluetoothPermissions()) {
+            onMessageReceived("Bluetooth permissions not granted")
+            return
+        }
+
         if (bluetoothAdapter == null) {
             onMessageReceived("Device doesn't support Bluetooth")
             return
         }
 
-        if (!bluetoothAdapter.isEnabled) {
+        if (!bluetoothAdapter!!.isEnabled) {
             onMessageReceived("Bluetooth is not enabled")
             return
         }
 
-        val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter.bondedDevices
-        val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
-//        val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
+        try {
+            val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter!!.bondedDevices
+            val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
+//            val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
 
-        serverDevice?.let { device ->
-            try {
-                socket?.close()
-                socket = device.createRfcommSocketToServiceRecord(uuid)
-                socket?.connect()
-                isConnected = true
-                shouldReconnect = true
-                onMessageReceived("Connected to server")
-                listenForData()
-            } catch (e: IOException) {
-                Log.e("BluetoothClient", "Could not connect to server", e)
-                onMessageReceived("Failed to connect: ${e.message}")
-                isConnected = false
-                startReconnectionThread()
-            }
-        } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+            serverDevice?.let { device ->
+                try {
+                    socket?.close()
+                    socket = device.createRfcommSocketToServiceRecord(uuid)
+                    socket?.connect()
+                    isConnected = true
+                    shouldReconnect = true
+                    onMessageReceived("Connected to server")
+                    listenForData()
+                } catch (e: IOException) {
+                    Log.e("BluetoothClient", "Could not connect to server", e)
+                    onMessageReceived("Failed to connect: ${e.message}")
+                    isConnected = false
+                    startReconnectionThread()
+                }
+            } ?: onMessageReceived("Server device not found. Make sure it's paired.")
+        } catch (e: SecurityException) {
+            Log.e("BluetoothClient", "Permission denied while accessing paired devices", e)
+            onMessageReceived("Bluetooth permission denied")
+        }
     }
 
     private fun startReconnectionThread() {
@@ -197,6 +226,12 @@ class BluetoothService : Service() {
     private val CHANNEL_ID_SEIZURE = "SeizureAlertChannel"
     private val CHANNEL_ID_EEG = "EEGDataChannel"
 
+    private fun checkSMSPermissions(): Boolean {
+        return SMS_PERMISSIONS.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
     companion object {
         var dataCallback: ((String) -> Unit)? = null
         var seizureCallback: ((String, List<Float>, LocationManager.LocationData?) -> Unit)? = null
@@ -245,18 +280,25 @@ class BluetoothService : Service() {
         return when {
             message.contains("Device doesn't support Bluetooth") ->
                 "Bluetooth not supported on this device"
+
             message.contains("Bluetooth is not enabled") ->
                 "Please enable Bluetooth to use this feature"
+
             message.contains("Could not connect to server") ->
                 "Unable to connect to the EEG device. Please check if it's turned on and nearby"
+
             message.contains("Server device not found") ->
                 "EEG device not found. Please make sure it's paired with your phone"
+
             message.contains("Connection lost") ->
                 "Connection to EEG device lost. Attempting to reconnect..."
+
             message.contains("Connected to server") ->
                 "Connected to EEG device successfully"
+
             message.contains("read failed") || message.contains("socket might closed or timeout") ->
                 "Connection issue detected. Please check your EEG device"
+
             else -> message
         }
     }
@@ -292,7 +334,10 @@ class BluetoothService : Service() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this,
+            0,
+            notificationIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         val locationString = locationData?.let {
@@ -384,11 +429,13 @@ class BluetoothService : Service() {
                 description = descriptionText
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 200, 500)
-                setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build())
+                        .build()
+                )
             }
             val notificationManager: NotificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

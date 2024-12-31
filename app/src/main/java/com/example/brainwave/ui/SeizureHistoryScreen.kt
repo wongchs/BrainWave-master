@@ -91,22 +91,50 @@ fun SeizureHistoryScreen(onSeizureClick: (SeizureEvent) -> Unit) {
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            // Use different paths based on API level
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
         }
 
         val resolver = context.contentResolver
-        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        val uri = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // For Android 10 (API 29) and above
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        } else {
+            // For older versions
+            val downloadsDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val file = java.io.File(downloadsDir, fileName)
+            Uri.fromFile(file)
+        }
 
-        uri?.let {
-            resolver.openOutputStream(it)?.use { outputStream ->
-                outputStream.write(csvData.toByteArray())
-            }
-            downloadedFileUri = it
-            showShareDialog = true
-            Toast.makeText(context, "Seizure history downloaded as $fileName", Toast.LENGTH_LONG)
+        try {
+            uri?.let {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    resolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(csvData.toByteArray())
+                    }
+                } else {
+                    val file = java.io.File(it.path!!)
+                    file.outputStream().use { outputStream ->
+                        outputStream.write(csvData.toByteArray())
+                    }
+                }
+                downloadedFileUri = uri
+                showShareDialog = true
+                Toast.makeText(
+                    context,
+                    "Seizure history downloaded as $fileName",
+                    Toast.LENGTH_LONG
+                )
+                    .show()
+            } ?: Toast.makeText(context, "Failed to download seizure history", Toast.LENGTH_SHORT)
                 .show()
-        } ?: Toast.makeText(context, "Failed to download seizure history", Toast.LENGTH_SHORT)
-            .show()
+        } catch (e: Exception) {
+            Log.e("SeizureHistory", "Error saving file", e)
+            Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun openFile() {

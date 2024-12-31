@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +68,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         locationManager = LocationManager(this)
@@ -303,8 +305,17 @@ class MainActivity : ComponentActivity() {
             REQUEST_CHECK_SETTINGS -> {
                 when (resultCode) {
                     Activity.RESULT_OK -> {
-                        locationManager.startLocationUpdates { locationData ->
-                            // Handle location updates
+                        locationManager.startLocationUpdates(
+                            activity = this,
+                            onPermissionDenied = {
+                                Toast.makeText(
+                                    this,
+                                    "Location permissions are required for full functionality",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        ) { locationData ->
+                            // Handle location updates here
                         }
                     }
 

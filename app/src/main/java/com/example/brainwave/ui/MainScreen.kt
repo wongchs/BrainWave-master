@@ -1,15 +1,19 @@
 package com.example.brainwave.ui
 
+import android.Manifest
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.brainwave.bluetooth.BluetoothService
@@ -247,22 +253,86 @@ fun BluetoothEnablePrompt(context: Context) {
     val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     var showPrompt by remember { mutableStateOf(!bluetoothAdapter?.isEnabled!! ?: false) }
 
-    if (showPrompt) {
+    var showPermissionsDeniedDialog by remember { mutableStateOf(false) }
+    var showEnableBluetoothDialog by remember { mutableStateOf(false) }
+
+    // Check if Bluetooth is supported
+    if (bluetoothAdapter == null) {
+        Toast.makeText(context, "Bluetooth is not supported on this device", Toast.LENGTH_LONG)
+            .show()
+        return
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.values.all { it }
+        if (allGranted) {
+            if (bluetoothAdapter?.isEnabled == false) {
+                showEnableBluetoothDialog = true
+            }
+        } else {
+            showPermissionsDeniedDialog = true
+        }
+    }
+
+    // Bluetooth enable launcher
+    val enableBluetoothLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_OK) {
+            Toast.makeText(
+                context,
+                "Bluetooth is required for this app to function properly",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        checkBluetoothPermissions(
+            context = context,
+            onPermissionsGranted = {
+                if (bluetoothAdapter?.isEnabled == false) {
+                    showEnableBluetoothDialog = true
+                }
+            },
+            onPermissionRequest = { permissions ->
+                permissionLauncher.launch(permissions)
+            }
+        )
+    }
+
+    // Permission denied dialog
+    if (showPermissionsDeniedDialog) {
         AlertDialog(
-            onDismissRequest = { showPrompt = false },
+            onDismissRequest = { showPermissionsDeniedDialog = false },
+            title = { Text("Permissions Required") },
+            text = { Text("Bluetooth permissions are required for this app to function properly. Please enable them in settings.") },
+            confirmButton = {
+                TextButton(onClick = { showPermissionsDeniedDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showEnableBluetoothDialog) {
+        AlertDialog(
+            onDismissRequest = { showEnableBluetoothDialog = false },
             title = { Text("Enable Bluetooth") },
             text = { Text("Bluetooth is required for this app to function properly. Would you like to enable it?") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showPrompt = false
-                        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                        showEnableBluetoothDialog = false
                         try {
-                            (context as? Activity)?.startActivityForResult(enableBtIntent, 1)
-                        } catch (e: ActivityNotFoundException) {
+                            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                            enableBluetoothLauncher.launch(enableBtIntent)
+                        } catch (e: SecurityException) {
                             Toast.makeText(
                                 context,
-                                "Unable to enable Bluetooth. Please enable it manually.",
+                                "Unable to enable Bluetooth. Please check permissions.",
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -272,13 +342,42 @@ fun BluetoothEnablePrompt(context: Context) {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPrompt = false }) {
+                TextButton(onClick = { showEnableBluetoothDialog = false }) {
                     Text("Cancel")
                 }
             }
         )
     }
 }
+
+private fun checkBluetoothPermissions(
+    context: Context,
+    onPermissionsGranted: () -> Unit,
+    onPermissionRequest: (Array<String>) -> Unit
+) {
+    val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+    } else {
+        arrayOf(
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN
+        )
+    }
+
+    val hasPermissions = permissions.all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    if (hasPermissions) {
+        onPermissionsGranted()
+    } else {
+        onPermissionRequest(permissions)
+    }
+}
+
 
 @Composable
 fun LocationEnablePrompt(locationManager: LocationManager) {
