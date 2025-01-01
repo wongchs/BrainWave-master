@@ -93,8 +93,7 @@ class BluetoothClient(
 
         try {
             val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter!!.bondedDevices
-//            val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
-            val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
+            val serverDevice = pairedDevices?.find { it.name == "SeizureDetector" }
 
             serverDevice?.let { device ->
                 try {
