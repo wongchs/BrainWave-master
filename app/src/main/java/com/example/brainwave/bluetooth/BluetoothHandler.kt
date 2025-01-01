@@ -76,25 +76,25 @@ class BluetoothClient(
     }
 
     fun connectToServer() {
-        if (!checkBluetoothPermissions()) {
-            onMessageReceived("Bluetooth permissions not granted")
-            return
-        }
-
-        if (bluetoothAdapter == null) {
-            onMessageReceived("Device doesn't support Bluetooth")
-            return
-        }
-
-        if (!bluetoothAdapter!!.isEnabled) {
-            onMessageReceived("Bluetooth is not enabled")
-            return
-        }
+//        if (!checkBluetoothPermissions()) {
+//            onMessageReceived("Bluetooth permissions not granted")
+//            return
+//        }
+//
+//        if (bluetoothAdapter == null) {
+//            onMessageReceived("Device doesn't support Bluetooth")
+//            return
+//        }
+//
+//        if (!bluetoothAdapter!!.isEnabled) {
+//            onMessageReceived("Bluetooth is not enabled")
+//            return
+//        }
 
         try {
             val pairedDevices: Set<BluetoothDevice>? = bluetoothAdapter!!.bondedDevices
-            val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
-//            val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
+//            val serverDevice = pairedDevices?.find { it.name == "NBLK-WAX9X" }
+            val serverDevice = pairedDevices?.find { it.name == "DESKTOP-L39AOUK" }
 
             serverDevice?.let { device ->
                 try {
